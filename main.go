@@ -26,7 +26,8 @@ var (
 
 // command-line options
 var (
-	verbose bool
+	verbose  bool
+	showPath bool
 )
 
 func init() {
@@ -35,6 +36,7 @@ func init() {
 	envlib = os.Getenv("LD_LIBRARY_PATH")
 
 	flag.BoolVar(&verbose, "v", false, "Show binary info")
+	flag.BoolVar(&showPath, "p", false, "Show library path")
 }
 
 func findLib(name string) string {
@@ -64,7 +66,12 @@ func processDep(dep DepsInfo) {
 	for i := 0; i < dep.depth; i++ {
 		fmt.Printf("   ")
 	}
-	fmt.Println(dep.name)
+
+	if showPath {
+		fmt.Printf("%s  => %s\n", dep.name, dep.path)
+	} else {
+		fmt.Println(dep.name)
+	}
 
 	// skip duplicate libraries
 	if _, ok := deps[dep.name]; ok {

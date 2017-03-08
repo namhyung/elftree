@@ -2,6 +2,14 @@
 
 Show library dependency of an ELF binary.
 
+    $ elftree
+    Usage: elftree [<options>] <executable>
+
+    $ elftree -h
+    Usage of elftree:
+      -p	Show library path
+      -v	Show binary info
+
     $ elftree `which firefox`
     firefox
        libpthread.so.0
