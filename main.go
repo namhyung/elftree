@@ -3,9 +3,11 @@ package main
 
 import (
 	"debug/elf"
+	"flag"
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -22,10 +24,17 @@ var (
 	envlib    string
 )
 
+// command-line options
+var (
+	verbose bool
+)
+
 func init() {
 	deps = make(map[string]bool)
 	deflib = []string{"/lib/", "/usr/lib/"}
 	envlib = os.Getenv("LD_LIBRARY_PATH")
+
+	flag.BoolVar(&verbose, "v", false, "Show binary info")
 }
 
 func findLib(name string) string {
@@ -84,13 +93,46 @@ func processDep(dep DepsInfo) {
 	deps_list = append(L, deps_list...)
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: elftree <executable>")
+func showDetails(f *elf.File, pathname string) {
+	s := f.Section(".interp")
+	if s == nil {
+		fmt.Printf("static linked executable: %s\n", pathname)
+		os.Exit(1)
+	}
+	interp, err := s.Data()
+	if err != nil {
+		fmt.Printf("%v: %s\n", err, pathname)
 		os.Exit(1)
 	}
 
-	pathname := os.Args[1]
+	di_deps, err := f.ImportedLibraries()
+	if err != nil {
+		fmt.Printf("imported libraries: %v\n", err)
+		os.Exit(1)
+	}
+
+	relpath, _ := filepath.EvalSymlinks(pathname)
+	abspath, _ := filepath.Abs(relpath)
+
+	fmt.Println()
+	fmt.Printf("%s: %s\n", path.Base(pathname), abspath)
+	fmt.Printf("  type:                     %s  (%s / %s / %s)\n",
+		f.Type, f.Machine, f.Class, f.ByteOrder)
+	fmt.Printf("  interpreter:              %s\n", string(interp))
+	fmt.Printf("  total dependency:         %d\n", len(deps)-1) // exclude itself
+	fmt.Printf("  direct dependency:        %d\n", len(di_deps))
+}
+
+func main() {
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) < 1 {
+		fmt.Println("Usage: elftree [<options>] <executable>")
+		os.Exit(1)
+	}
+
+	pathname := args[0]
 	f, err := elf.Open(pathname)
 	if err != nil {
 		fmt.Printf("%v: %s\n", err, pathname)
@@ -105,5 +147,9 @@ func main() {
 		deps_list = deps_list[1:]
 
 		processDep(dep)
+	}
+
+	if verbose {
+		showDetails(f, pathname)
 	}
 }
