@@ -11,15 +11,21 @@ import (
 	"strings"
 )
 
+type DepsNode struct {
+	name   string
+	parent *DepsNode
+	child  []*DepsNode
+	depth  int
+}
+
 type DepsInfo struct {
-	name  string
-	path  string
-	depth int
+	path string
 }
 
 var (
-	deps      map[string]bool
-	deps_list []DepsInfo
+	deps      map[string]DepsInfo
+	deps_list []*DepsNode
+	deps_root *DepsNode
 	deflib    []string
 	envlib    string
 )
@@ -31,7 +37,7 @@ var (
 )
 
 func init() {
-	deps = make(map[string]bool)
+	deps = make(map[string]DepsInfo)
 	deflib = []string{"/lib/", "/usr/lib/"}
 	envlib = os.Getenv("LD_LIBRARY_PATH")
 
@@ -62,26 +68,21 @@ func findLib(name string) string {
 	return ""
 }
 
-func processDep(dep DepsInfo) {
-	for i := 0; i < dep.depth; i++ {
-		fmt.Printf("   ")
-	}
-
-	if showPath {
-		fmt.Printf("%s  => %s\n", dep.name, dep.path)
-	} else {
-		fmt.Println(dep.name)
-	}
-
+func processDep(dep *DepsNode) {
 	// skip duplicate libraries
 	if _, ok := deps[dep.name]; ok {
 		return
 	}
-	deps[dep.name] = true
 
-	f, err := elf.Open(dep.path)
+	info := DepsInfo{findLib(dep.name)}
+
+	if dep.parent == nil {
+		info.path = flag.Args()[0]
+	}
+
+	f, err := elf.Open(info.path)
 	if err != nil {
-		fmt.Printf("%v: %s\n", err, dep.path)
+		fmt.Printf("%v: %s\n", err, info.path)
 		os.Exit(1)
 	}
 	defer f.Close()
@@ -92,12 +93,35 @@ func processDep(dep DepsInfo) {
 		os.Exit(1)
 	}
 
-	var L []DepsInfo
+	var L []*DepsNode
 	for _, soname := range libs {
-		L = append(L, DepsInfo{soname, findLib(soname), dep.depth + 1})
+		N := new(DepsNode)
+		N.name = soname
+		N.parent = dep
+		N.depth = dep.depth + 1
+
+		L = append(L, N)
+		dep.child = append(dep.child, N)
 	}
 
 	deps_list = append(L, deps_list...)
+	deps[dep.name] = info
+}
+
+func printDepTree(n *DepsNode) {
+	for i := 0; i < n.depth; i++ {
+		fmt.Printf("   ")
+	}
+
+	if showPath {
+		fmt.Printf("%s  => %s\n", n.name, deps[n.name].path)
+	} else {
+		fmt.Println(n.name)
+	}
+
+	for _, v := range n.child {
+		printDepTree(v)
+	}
 }
 
 func showDetails(f *elf.File, pathname string) {
@@ -147,7 +171,10 @@ func main() {
 	}
 	defer f.Close()
 
-	deps_list = append(deps_list, DepsInfo{path.Base(pathname), pathname, 0})
+	deps_root = new(DepsNode)
+	deps_root.name = path.Base(pathname)
+
+	deps_list = append(deps_list, deps_root)
 	for len(deps_list) > 0 {
 		// pop first element
 		dep := deps_list[0]
@@ -155,6 +182,8 @@ func main() {
 
 		processDep(dep)
 	}
+
+	printDepTree(deps_root)
 
 	if verbose {
 		showDetails(f, pathname)
