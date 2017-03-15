@@ -68,16 +68,23 @@ func findLib(name string) string {
 	return ""
 }
 
+func realPath(pathname string) string {
+	relpath, _ := filepath.EvalSymlinks(pathname)
+	abspath, _ := filepath.Abs(relpath)
+
+	return abspath
+}
+
 func processDep(dep *DepsNode) {
 	// skip duplicate libraries
 	if _, ok := deps[dep.name]; ok {
 		return
 	}
 
-	info := DepsInfo{findLib(dep.name)}
+	info := DepsInfo{realPath(findLib(dep.name))}
 
 	if dep.parent == nil {
-		info.path = flag.Args()[0]
+		info.path = realPath(flag.Args()[0])
 	}
 
 	f, err := elf.Open(info.path)
@@ -142,11 +149,8 @@ func showDetails(f *elf.File, pathname string) {
 		os.Exit(1)
 	}
 
-	relpath, _ := filepath.EvalSymlinks(pathname)
-	abspath, _ := filepath.Abs(relpath)
-
 	fmt.Println()
-	fmt.Printf("%s: %s\n", path.Base(pathname), abspath)
+	fmt.Printf("%s: %s\n", path.Base(pathname), realPath(pathname))
 	fmt.Printf("  type:                     %s  (%s / %s / %s)\n",
 		f.Type, f.Machine, f.Class, f.ByteOrder)
 	fmt.Printf("  interpreter:              %s\n", string(interp))
