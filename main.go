@@ -34,6 +34,7 @@ var (
 var (
 	verbose  bool
 	showPath bool
+	showTui  bool
 )
 
 func init() {
@@ -43,6 +44,7 @@ func init() {
 
 	flag.BoolVar(&verbose, "v", false, "Show binary info")
 	flag.BoolVar(&showPath, "p", false, "Show library path")
+	flag.BoolVar(&showTui, "tui", false, "Show it with TUI")
 }
 
 func findLib(name string) string {
@@ -187,7 +189,11 @@ func main() {
 		processDep(dep)
 	}
 
-	printDepTree(deps_root)
+	if showTui {
+		ShowWithTUI(deps_root)
+	} else {
+		printDepTree(deps_root)
+	}
 
 	if verbose {
 		showDetails(f, pathname)
