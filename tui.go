@@ -144,5 +144,11 @@ func ShowWithTUI(dep *DepsNode) {
 		tui.Render(ls)
 	})
 
+	tui.Handle("/sys/wnd/resize", func(tui.Event) {
+		ls.Height = tui.TermHeight()
+		ls.Width = tui.TermWidth()
+		tui.Render(ls)
+	})
+
 	tui.Loop()
 }
