@@ -176,6 +176,56 @@ func (l *ScrollList) Up() {
 	}
 }
 
+func (l *ScrollList) PageDown() {
+	bottom := l.off + (l.Height - 2) - 1
+	if bottom > l.Items.total {
+		bottom = l.Items.total
+	}
+
+	// At first, move to the bottom of current page
+	if l.idx != bottom {
+		l.idx = bottom
+		return
+	}
+
+	l.idx += l.Height - 2
+	if l.idx > l.Items.total {
+		l.idx = l.Items.total
+	}
+	if l.idx-l.off >= l.Height-2 {
+		l.off = l.idx - (l.Height - 2) + 1
+	}
+}
+
+func (l *ScrollList) PageUp() {
+	// At first, move to the top of current page
+	if l.idx != l.off {
+		l.idx = l.off
+		return
+	}
+
+	l.idx -= l.Height - 2
+	if l.idx < 0 {
+		l.idx = 0
+	}
+
+	l.off = l.idx
+}
+
+func (l *ScrollList) Home() {
+	l.idx = 0
+	l.off = 0
+}
+
+func (l *ScrollList) End() {
+	l.idx = l.Items.total
+	l.off = l.idx - (l.Height - 2) + 1
+
+	if l.off < 0 {
+		l.off = 0
+	}
+}
+
 func (l *ScrollList) Toggle() {
 	l.Curr.toggle()
 }
@@ -234,6 +284,22 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 	tui.Handle("/sys/kbd/<up>", func(tui.Event) {
 		ls.Up()
+		tui.Render(ls)
+	})
+	tui.Handle("/sys/kbd/<next>", func(tui.Event) {
+		ls.PageDown()
+		tui.Render(ls)
+	})
+	tui.Handle("/sys/kbd/<previous>", func(tui.Event) {
+		ls.PageUp()
+		tui.Render(ls)
+	})
+	tui.Handle("/sys/kbd/<home>", func(tui.Event) {
+		ls.Home()
+		tui.Render(ls)
+	})
+	tui.Handle("/sys/kbd/<end>", func(tui.Event) {
+		ls.End()
 		tui.Render(ls)
 	})
 
