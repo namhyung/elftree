@@ -3,7 +3,7 @@ package main
 import tui "github.com/gizak/termui"
 
 type TreeItem struct {
-	n       *DepsNode
+	node    *DepsNode
 	parent  *TreeItem
 	sibling *TreeItem
 	child   *TreeItem // pointer to first child
@@ -11,9 +11,9 @@ type TreeItem struct {
 	total   int // number of (shown) children (not count itself)
 }
 
-type ScrollList struct {
+type TreeView struct {
 	tui.Block // embedded
-	Items     *TreeItem
+	Root      *TreeItem
 	Curr      *TreeItem
 
 	ItemFgColor  tui.Attribute
@@ -25,107 +25,109 @@ type ScrollList struct {
 	off int // first entry displayed
 }
 
-func NewScrollList() *ScrollList {
-	l := &ScrollList{Block: *tui.NewBlock()}
-	l.ItemFgColor = tui.ThemeAttr("list.item.fg")
-	l.ItemBgColor = tui.ThemeAttr("list.item.bg")
-	l.FocusFgColor = tui.ColorYellow
-	l.FocusBgColor = tui.ColorBlue
+func NewTreeView() *TreeView {
+	tv := &TreeView{Block: *tui.NewBlock()}
 
-	l.idx = 0
-	l.off = 0
-	return l
+	tv.ItemFgColor = tui.ThemeAttr("list.item.fg")
+	tv.ItemBgColor = tui.ThemeAttr("list.item.bg")
+	tv.FocusFgColor = tui.ColorYellow
+	tv.FocusBgColor = tui.ColorBlue
+
+	tv.idx = 0
+	tv.off = 0
+	return tv
 }
 
-func (i *TreeItem) next() *TreeItem {
-	if i.child == nil || i.folded {
-		for i != nil {
-			if i.sibling != nil {
-				return i.sibling
+func (ti *TreeItem) next() *TreeItem {
+	if ti.child == nil || ti.folded {
+		for ti != nil {
+			if ti.sibling != nil {
+				return ti.sibling
 			}
 
-			i = i.parent
+			ti = ti.parent
 		}
 		return nil
 	}
-	return i.child
+	return ti.child
 }
 
-func (i *TreeItem) expand() {
-	if !i.folded || i.child == nil {
+func (ti *TreeItem) expand() {
+	if !ti.folded || ti.child == nil {
 		return
 	}
 
-	for c := i.child; c != nil; c = c.sibling {
-		i.total += c.total + 1
+	for c := ti.child; c != nil; c = c.sibling {
+		ti.total += c.total + 1
 	}
 
-	for p := i.parent; p != nil; p = p.parent {
-		p.total += i.total
+	for p := ti.parent; p != nil; p = p.parent {
+		p.total += ti.total
 	}
 
-	i.folded = false
+	ti.folded = false
 }
 
-func (i *TreeItem) fold() {
-	if i.folded || i.child == nil {
+func (ti *TreeItem) fold() {
+	if ti.folded || ti.child == nil {
 		return
 	}
 
-	for p := i.parent; p != nil; p = p.parent {
-		p.total -= i.total
+	for p := ti.parent; p != nil; p = p.parent {
+		p.total -= ti.total
 	}
-	i.total = 0
+	ti.total = 0
 
-	i.folded = true
+	ti.folded = true
 }
 
-func (i *TreeItem) toggle() {
-	if i.folded {
-		i.expand()
+func (ti *TreeItem) toggle() {
+	if ti.folded {
+		ti.expand()
 	} else {
-		i.fold()
+		ti.fold()
 	}
 }
 
 // Buffer implements Bufferer interface.
-func (l *ScrollList) Buffer() tui.Buffer {
-	buf := l.Block.Buffer()
+func (tv *TreeView) Buffer() tui.Buffer {
+	buf := tv.Block.Buffer()
 
 	i := 0
 	printed := 0
 
 	var ti *TreeItem
-	for ti = l.Items; ti != nil; ti = ti.next() {
-		if i < l.off {
+	for ti = tv.Root; ti != nil; ti = ti.next() {
+		if i < tv.off {
 			i++
 			continue
 		}
-		if printed == l.Height-2 {
+		if printed == tv.Height-2 {
 			break
 		}
 
-		fg := l.ItemFgColor
-		bg := l.ItemBgColor
-		if i == l.idx {
-			fg = l.FocusFgColor
-			bg = l.FocusBgColor
+		fg := tv.ItemFgColor
+		bg := tv.ItemBgColor
+		if i == tv.idx {
+			fg = tv.FocusFgColor
+			bg = tv.FocusBgColor
 
-			l.Curr = ti
+			tv.Curr = ti
 		}
 
-		cs := tui.DefaultTxBuilder.Build(ti.n.name, fg, bg)
-		cs = tui.DTrimTxCls(cs, l.Width-2-2-3*ti.n.depth)
+		indent := 3 * ti.node.depth
+		cs := tui.DefaultTxBuilder.Build(ti.node.name, fg, bg)
+		cs = tui.DTrimTxCls(cs, (tv.Width-2)-2-indent)
 
 		j := 0
-		if i == l.idx {
+		if i == tv.idx {
 			// draw current line cursor from the beginning
-			for j < 3*ti.n.depth {
+			for j < indent {
 				buf.Set(j+1, printed+1, tui.Cell{' ', fg, bg})
 				j++
 			}
 		} else {
-			j = 3 * ti.n.depth
+			j = indent
 		}
 
 		if ti.folded {
@@ -145,12 +147,12 @@ func (l *ScrollList) Buffer() tui.Buffer {
 		printed++
 		i++
 
-		if i != l.idx+1 {
+		if i != tv.idx+1 {
 			continue
 		}
 
 		// draw current line cursor to the end
-		for j < l.Width-2 {
+		for j < tv.Width-2 {
 			buf.Set(j+1, printed, tui.Cell{' ', fg, bg})
 			j++
 		}
@@ -158,80 +160,80 @@ func (l *ScrollList) Buffer() tui.Buffer {
 	return buf
 }
 
-func (l *ScrollList) Down() {
-	if l.idx < l.Items.total {
-		l.idx++
+func (tv *TreeView) Down() {
+	if tv.idx < tv.Root.total {
+		tv.idx++
 	}
-	if l.idx-l.off >= l.Height-2 {
-		l.off++
-	}
-}
-
-func (l *ScrollList) Up() {
-	if l.idx > 0 {
-		l.idx--
-	}
-	if l.idx < l.off {
-		l.off = l.idx
+	if tv.idx-tv.off >= tv.Height-2 {
+		tv.off++
 	}
 }
 
-func (l *ScrollList) PageDown() {
-	bottom := l.off + (l.Height - 2) - 1
-	if bottom > l.Items.total {
-		bottom = l.Items.total
+func (tv *TreeView) Up() {
+	if tv.idx > 0 {
+		tv.idx--
+	}
+	if tv.idx < tv.off {
+		tv.off = tv.idx
+	}
+}
+
+func (tv *TreeView) PageDown() {
+	bottom := tv.off + (tv.Height - 2) - 1
+	if bottom > tv.Root.total {
+		bottom = tv.Root.total
 	}
 
 	// At first, move to the bottom of current page
-	if l.idx != bottom {
-		l.idx = bottom
+	if tv.idx != bottom {
+		tv.idx = bottom
 		return
 	}
 
-	l.idx += l.Height - 2
-	if l.idx > l.Items.total {
-		l.idx = l.Items.total
+	tv.idx += tv.Height - 2
+	if tv.idx > tv.Root.total {
+		tv.idx = tv.Root.total
 	}
-	if l.idx-l.off >= l.Height-2 {
-		l.off = l.idx - (l.Height - 2) + 1
+	if tv.idx-tv.off >= tv.Height-2 {
+		tv.off = tv.idx - (tv.Height - 2) + 1
 	}
 }
 
-func (l *ScrollList) PageUp() {
+func (tv *TreeView) PageUp() {
 	// At first, move to the top of current page
-	if l.idx != l.off {
-		l.idx = l.off
+	if tv.idx != tv.off {
+		tv.idx = tv.off
 		return
 	}
 
-	l.idx -= l.Height - 2
-	if l.idx < 0 {
-		l.idx = 0
+	tv.idx -= tv.Height - 2
+	if tv.idx < 0 {
+		tv.idx = 0
 	}
 
-	l.off = l.idx
+	tv.off = tv.idx
 }
 
-func (l *ScrollList) Home() {
-	l.idx = 0
-	l.off = 0
+func (tv *TreeView) Home() {
+	tv.idx = 0
+	tv.off = 0
 }
 
-func (l *ScrollList) End() {
-	l.idx = l.Items.total
-	l.off = l.idx - (l.Height - 2) + 1
+func (tv *TreeView) End() {
+	tv.idx = tv.Root.total
+	tv.off = tv.idx - (tv.Height - 2) + 1
 
-	if l.off < 0 {
-		l.off = 0
+	if tv.off < 0 {
+		tv.off = 0
 	}
 }
 
-func (l *ScrollList) Toggle() {
-	l.Curr.toggle()
+func (tv *TreeView) Toggle() {
+	tv.Curr.toggle()
 }
 
 func makeItems(dep *DepsNode, parent *TreeItem) *TreeItem {
-	item := &TreeItem{n: dep, parent: parent, folded: false, total: len(dep.child)}
+	item := &TreeItem{node: dep, parent: parent, folded: false, total: len(dep.child)}
 
 	var prev *TreeItem
 	for _, v := range dep.child {
@@ -256,17 +258,17 @@ func ShowWithTUI(dep *DepsNode) {
 	}
 	defer tui.Close()
 
-	items := makeItems(dep, nil)
+	root := makeItems(dep, nil)
 
-	ls := NewScrollList()
+	tv := NewTreeView()
 
-	ls.BorderLabel = "Tree view"
-	ls.Height = tui.TermHeight()
-	ls.Width = tui.TermWidth()
-	ls.Items = items
-	ls.Curr = items
+	tv.BorderLabel = "ELF Tree"
+	tv.Height = tui.TermHeight()
+	tv.Width = tui.TermWidth()
+	tv.Root = root
+	tv.Curr = root
 
-	tui.Render(ls)
+	tui.Render(tv)
 
 	// handle key pressing
 	tui.Handle("/sys/kbd/q", func(tui.Event) {
@@ -279,39 +281,39 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 
 	tui.Handle("/sys/kbd/<down>", func(tui.Event) {
-		ls.Down()
-		tui.Render(ls)
+		tv.Down()
+		tui.Render(tv)
 	})
 	tui.Handle("/sys/kbd/<up>", func(tui.Event) {
-		ls.Up()
-		tui.Render(ls)
+		tv.Up()
+		tui.Render(tv)
 	})
 	tui.Handle("/sys/kbd/<next>", func(tui.Event) {
-		ls.PageDown()
-		tui.Render(ls)
+		tv.PageDown()
+		tui.Render(tv)
 	})
 	tui.Handle("/sys/kbd/<previous>", func(tui.Event) {
-		ls.PageUp()
-		tui.Render(ls)
+		tv.PageUp()
+		tui.Render(tv)
 	})
 	tui.Handle("/sys/kbd/<home>", func(tui.Event) {
-		ls.Home()
-		tui.Render(ls)
+		tv.Home()
+		tui.Render(tv)
 	})
 	tui.Handle("/sys/kbd/<end>", func(tui.Event) {
-		ls.End()
-		tui.Render(ls)
+		tv.End()
+		tui.Render(tv)
 	})
 
 	tui.Handle("/sys/kbd/<enter>", func(tui.Event) {
-		ls.Toggle()
-		tui.Render(ls)
+		tv.Toggle()
+		tui.Render(tv)
 	})
 
 	tui.Handle("/sys/wnd/resize", func(tui.Event) {
-		ls.Height = tui.TermHeight()
-		ls.Width = tui.TermWidth()
-		tui.Render(ls)
+		tv.Height = tui.TermHeight()
+		tv.Width = tui.TermWidth()
+		tui.Render(tv)
 	})
 
 	tui.Loop()
