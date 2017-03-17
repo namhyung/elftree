@@ -125,18 +125,21 @@ func ShowWithTUI(dep *DepsNode) {
 
 	tui.Render(ls)
 
-	// handle key q pressing
+	// handle key pressing
 	tui.Handle("/sys/kbd/q", func(tui.Event) {
 		// press q to quit
 		tui.StopLoop()
 	})
+	tui.Handle("/sys/kbd/C-c", func(tui.Event) {
+		// press Ctrl-C to quit
+		tui.StopLoop()
+	})
+
 	tui.Handle("/sys/kbd/<down>", func(tui.Event) {
-		// press q to quit
 		ls.Down()
 		tui.Render(ls)
 	})
 	tui.Handle("/sys/kbd/<up>", func(tui.Event) {
-		// press q to quit
 		ls.Up()
 		tui.Render(ls)
 	})
