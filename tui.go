@@ -23,6 +23,9 @@ type TreeView struct {
 
 	idx int // current cursor position
 	off int // first entry displayed
+
+	rows int
+	cols int
 }
 
 func NewTreeView() *TreeView {
@@ -102,7 +105,7 @@ func (tv *TreeView) Buffer() tui.Buffer {
 			i++
 			continue
 		}
-		if printed == tv.Height-2 {
+		if printed == tv.rows {
 			break
 		}
 
@@ -117,7 +120,7 @@ func (tv *TreeView) Buffer() tui.Buffer {
 
 		indent := 3 * ti.node.depth
 		cs := tui.DefaultTxBuilder.Build(ti.node.name, fg, bg)
-		cs = tui.DTrimTxCls(cs, (tv.Width-2)-2-indent)
+		cs = tui.DTrimTxCls(cs, tv.cols-2-indent)
 
 		j := 0
 		if i == tv.idx {
@@ -152,7 +155,7 @@ func (tv *TreeView) Buffer() tui.Buffer {
 		}
 
 		// draw current line cursor to the end
-		for j < tv.Width-2 {
+		for j < tv.cols {
 			buf.Set(j+1, printed, tui.Cell{' ', fg, bg})
 			j++
 		}
@@ -164,7 +167,7 @@ func (tv *TreeView) Down() {
 	if tv.idx < tv.Root.total {
 		tv.idx++
 	}
-	if tv.idx-tv.off >= tv.Height-2 {
+	if tv.idx-tv.off >= tv.rows {
 		tv.off++
 	}
 }
@@ -179,7 +182,7 @@ func (tv *TreeView) Up() {
 }
 
 func (tv *TreeView) PageDown() {
-	bottom := tv.off + (tv.Height - 2) - 1
+	bottom := tv.off + tv.rows - 1
 	if bottom > tv.Root.total {
 		bottom = tv.Root.total
 	}
@@ -190,12 +193,12 @@ func (tv *TreeView) PageDown() {
 		return
 	}
 
-	tv.idx += tv.Height - 2
+	tv.idx += tv.rows
 	if tv.idx > tv.Root.total {
 		tv.idx = tv.Root.total
 	}
-	if tv.idx-tv.off >= tv.Height-2 {
-		tv.off = tv.idx - (tv.Height - 2) + 1
+	if tv.idx-tv.off >= tv.rows {
+		tv.off = tv.idx - tv.rows + 1
 	}
 }
 
@@ -206,7 +209,7 @@ func (tv *TreeView) PageUp() {
 		return
 	}
 
-	tv.idx -= tv.Height - 2
+	tv.idx -= tv.rows
 	if tv.idx < 0 {
 		tv.idx = 0
 	}
@@ -221,7 +224,7 @@ func (tv *TreeView) Home() {
 
 func (tv *TreeView) End() {
 	tv.idx = tv.Root.total
-	tv.off = tv.idx - (tv.Height - 2) + 1
+	tv.off = tv.idx - tv.rows + 1
 
 	if tv.off < 0 {
 		tv.off = 0
@@ -268,6 +271,9 @@ func ShowWithTUI(dep *DepsNode) {
 	tv.Root = root
 	tv.Curr = root
 
+	tv.rows = tv.Height - 2 // exclude border at top and bottom
+	tv.cols = tv.Width - 2  // exclude border at left and right
+
 	tui.Render(tv)
 
 	// handle key pressing
@@ -313,6 +319,8 @@ func ShowWithTUI(dep *DepsNode) {
 	tui.Handle("/sys/wnd/resize", func(tui.Event) {
 		tv.Height = tui.TermHeight()
 		tv.Width = tui.TermWidth()
+		tv.rows = tv.Height - 2
+		tv.cols = tv.Width - 2
 		tui.Render(tv)
 	})
 
