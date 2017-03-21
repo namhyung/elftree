@@ -160,6 +160,45 @@ func (tv *TreeView) Buffer() tui.Buffer {
 			j++
 		}
 	}
+
+	// the last line is a status line
+	var line string
+
+	if tv.Curr != nil {
+		line = tv.Curr.node.name
+
+		n := tv.Curr.node.parent
+		for n != nil {
+			line = n.name + " > " + line
+
+			n = n.parent
+		}
+	} else {
+		line = "ELF tree"
+	}
+
+	fg := tui.ColorBlack
+	bg := tui.ColorWhite
+
+	cs := tui.DefaultTxBuilder.Build(line, fg, bg)
+	cs = tui.DTrimTxCls(cs, tv.cols-2)
+
+	buf.Set(1, printed+1, tui.Cell{' ', fg, bg})
+	buf.Set(2, printed+1, tui.Cell{' ', fg, bg})
+
+	j := 2
+	for _, vv := range cs {
+		w := vv.Width()
+		buf.Set(j+1, tv.rows+1, vv)
+		j += w
+	}
+
+	// draw status line to the end
+	for j < tv.cols {
+		buf.Set(j+1, tv.rows+1, tui.Cell{' ', fg, bg})
+		j++
+	}
+
 	return buf
 }
 
@@ -271,7 +310,7 @@ func ShowWithTUI(dep *DepsNode) {
 	tv.Root = root
 	tv.Curr = root
 
-	tv.rows = tv.Height - 2 // exclude border at top and bottom
+	tv.rows = tv.Height - 3 // exclude border at top and bottom
 	tv.cols = tv.Width - 2  // exclude border at left and right
 
 	tui.Render(tv)
@@ -319,7 +358,7 @@ func ShowWithTUI(dep *DepsNode) {
 	tui.Handle("/sys/wnd/resize", func(tui.Event) {
 		tv.Height = tui.TermHeight()
 		tv.Width = tui.TermWidth()
-		tv.rows = tv.Height - 2
+		tv.rows = tv.Height - 3
 		tv.cols = tv.Width - 2
 		tui.Render(tv)
 	})
