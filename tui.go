@@ -161,6 +161,11 @@ func (tv *TreeView) Buffer() tui.Buffer {
 		}
 	}
 
+	// draw bottom border manually (before status line below)
+	buf.Merge(tui.Hline{1, tv.rows + 1, tv.Width - 2, tv.BorderFg, tv.BorderBg}.Buffer())
+	buf.Set(0, tv.rows+1, tui.Cell{tui.BOTTOM_LEFT, tv.BorderFg, tv.BorderBg})
+	buf.Set(tv.Width-1, tv.rows+1, tui.Cell{tui.BOTTOM_RIGHT, tv.BorderFg, tv.BorderBg})
+
 	// the last line is a status line
 	var line string
 
@@ -183,19 +188,19 @@ func (tv *TreeView) Buffer() tui.Buffer {
 	cs := tui.DefaultTxBuilder.Build(line, fg, bg)
 	cs = tui.DTrimTxCls(cs, tv.cols-2)
 
-	buf.Set(1, printed+1, tui.Cell{' ', fg, bg})
-	buf.Set(2, printed+1, tui.Cell{' ', fg, bg})
+	buf.Set(0, tv.rows+2, tui.Cell{' ', fg, bg})
+	buf.Set(1, tv.rows+2, tui.Cell{' ', fg, bg})
 
 	j := 2
 	for _, vv := range cs {
 		w := vv.Width()
-		buf.Set(j+1, tv.rows+1, vv)
+		buf.Set(j, tv.rows+2, vv)
 		j += w
 	}
 
 	// draw status line to the end
-	for j < tv.cols {
-		buf.Set(j+1, tv.rows+1, tui.Cell{' ', fg, bg})
+	for j < tv.cols+2 {
+		buf.Set(j, tv.rows+2, tui.Cell{' ', fg, bg})
 		j++
 	}
 
@@ -305,6 +310,8 @@ func ShowWithTUI(dep *DepsNode) {
 	tv := NewTreeView()
 
 	tv.BorderLabel = "ELF Tree"
+	tv.BorderBottom = false // draw it manually
+
 	tv.Height = tui.TermHeight()
 	tv.Width = tui.TermWidth()
 	tv.Root = root
