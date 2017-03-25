@@ -28,6 +28,11 @@ type TreeView struct {
 	cols int
 }
 
+type StatusLine struct {
+	tui.Block // embedded
+	tv        *TreeView
+}
+
 func NewTreeView() *TreeView {
 	tv := &TreeView{Block: *tui.NewBlock()}
 
@@ -36,9 +41,20 @@ func NewTreeView() *TreeView {
 	tv.FocusFgColor = tui.ColorYellow
 	tv.FocusBgColor = tui.ColorBlue
 
+	tv.BorderLabel = "ELF Tree"
+
 	tv.idx = 0
 	tv.off = 0
 	return tv
+}
+
+func NewStatusLine(tv *TreeView) *StatusLine {
+	sl := &StatusLine{Block: *tui.NewBlock()}
+
+	sl.Block.Border = false
+
+	sl.tv = tv
+	return sl
 }
 
 func (ti *TreeItem) next() *TreeItem {
@@ -161,49 +177,6 @@ func (tv *TreeView) Buffer() tui.Buffer {
 		}
 	}
 
-	// draw bottom border manually (before status line below)
-	buf.Merge(tui.Hline{1, tv.rows + 1, tv.Width - 2, tv.BorderFg, tv.BorderBg}.Buffer())
-	buf.Set(0, tv.rows+1, tui.Cell{tui.BOTTOM_LEFT, tv.BorderFg, tv.BorderBg})
-	buf.Set(tv.Width-1, tv.rows+1, tui.Cell{tui.BOTTOM_RIGHT, tv.BorderFg, tv.BorderBg})
-
-	// the last line is a status line
-	var line string
-
-	if tv.Curr != nil {
-		line = tv.Curr.node.name
-
-		n := tv.Curr.node.parent
-		for n != nil {
-			line = n.name + " > " + line
-
-			n = n.parent
-		}
-	} else {
-		line = "ELF tree"
-	}
-
-	fg := tui.ColorBlack
-	bg := tui.ColorWhite
-
-	cs := tui.DefaultTxBuilder.Build(line, fg, bg)
-	cs = tui.DTrimTxCls(cs, tv.cols-2)
-
-	buf.Set(0, tv.rows+2, tui.Cell{' ', fg, bg})
-	buf.Set(1, tv.rows+2, tui.Cell{' ', fg, bg})
-
-	j := 2
-	for _, vv := range cs {
-		w := vv.Width()
-		buf.Set(j, tv.rows+2, vv)
-		j += w
-	}
-
-	// draw status line to the end
-	for j < tv.cols+2 {
-		buf.Set(j, tv.rows+2, tui.Cell{' ', fg, bg})
-		j++
-	}
-
 	return buf
 }
 
@@ -279,6 +252,51 @@ func (tv *TreeView) Toggle() {
 	tv.Curr.toggle()
 }
 
+// Buffer implements Bufferer interface.
+func (sl *StatusLine) Buffer() tui.Buffer {
+	buf := sl.Block.Buffer()
+
+	var line string
+
+	curr := sl.tv.Curr
+	if curr != nil {
+		line = curr.node.name
+
+		n := curr.node.parent
+		for n != nil {
+			line = n.name + " > " + line
+
+			n = n.parent
+		}
+	} else {
+		line = "ELF tree"
+	}
+
+	fg := tui.ColorBlack
+	bg := tui.ColorWhite
+
+	cs := tui.DefaultTxBuilder.Build(line, fg, bg)
+	cs = tui.DTrimTxCls(cs, sl.Width-3)
+
+	buf.Set(0, sl.Y, tui.Cell{' ', fg, bg})
+	buf.Set(1, sl.Y, tui.Cell{' ', fg, bg})
+
+	j := 2
+	for _, vv := range cs {
+		w := vv.Width()
+		buf.Set(j, sl.Y, vv)
+		j += w
+	}
+
+	// draw status line to the end
+	for j < sl.Width {
+		buf.Set(j, sl.Y, tui.Cell{' ', fg, bg})
+		j++
+	}
+
+	return buf
+}
+
 func makeItems(dep *DepsNode, parent *TreeItem) *TreeItem {
 	item := &TreeItem{node: dep, parent: parent, folded: false, total: len(dep.child)}
 
@@ -309,18 +327,22 @@ func ShowWithTUI(dep *DepsNode) {
 
 	tv := NewTreeView()
 
-	tv.BorderLabel = "ELF Tree"
-	tv.BorderBottom = false // draw it manually
-
-	tv.Height = tui.TermHeight()
+	tv.Height = tui.TermHeight() - 1
 	tv.Width = tui.TermWidth()
 	tv.Root = root
 	tv.Curr = root
 
-	tv.rows = tv.Height - 3 // exclude border at top and bottom
+	tv.rows = tv.Height - 2 // exclude border at top and bottom
 	tv.cols = tv.Width - 2  // exclude border at left and right
 
 	tui.Render(tv)
+
+	sl := NewStatusLine(tv)
+	sl.Height = 1
+	sl.Width = tui.TermWidth()
+	sl.Y = tui.TermHeight() - 1
+
+	tui.Render(sl)
 
 	// handle key pressing
 	tui.Handle("/sys/kbd/q", func(tui.Event) {
@@ -335,39 +357,50 @@ func ShowWithTUI(dep *DepsNode) {
 	tui.Handle("/sys/kbd/<down>", func(tui.Event) {
 		tv.Down()
 		tui.Render(tv)
+		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/<up>", func(tui.Event) {
 		tv.Up()
 		tui.Render(tv)
+		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/<next>", func(tui.Event) {
 		tv.PageDown()
 		tui.Render(tv)
+		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/<previous>", func(tui.Event) {
 		tv.PageUp()
 		tui.Render(tv)
+		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/<home>", func(tui.Event) {
 		tv.Home()
 		tui.Render(tv)
+		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/<end>", func(tui.Event) {
 		tv.End()
 		tui.Render(tv)
+		tui.Render(sl)
 	})
 
 	tui.Handle("/sys/kbd/<enter>", func(tui.Event) {
 		tv.Toggle()
 		tui.Render(tv)
+		tui.Render(sl)
 	})
 
 	tui.Handle("/sys/wnd/resize", func(tui.Event) {
-		tv.Height = tui.TermHeight()
+		tv.Height = tui.TermHeight() - 1
 		tv.Width = tui.TermWidth()
-		tv.rows = tv.Height - 3
+		tv.rows = tv.Height - 2
 		tv.cols = tv.Width - 2
 		tui.Render(tv)
+
+		sl.Width = tui.TermWidth()
+		sl.Y = tui.TermHeight() - 1
+		tui.Render(sl)
 	})
 
 	tui.Loop()
