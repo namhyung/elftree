@@ -23,6 +23,7 @@ type TreeView struct {
 
 	idx int // current cursor position
 	off int // first entry displayed
+	pos int // position of x-axis
 
 	rows int
 	cols int
@@ -136,30 +137,38 @@ func (tv *TreeView) Buffer() tui.Buffer {
 
 		indent := 3 * ti.node.depth
 		cs := tui.DefaultTxBuilder.Build(ti.node.name, fg, bg)
-		cs = tui.DTrimTxCls(cs, tv.cols-2-indent)
+		cs = tui.DTrimTxCls(cs, tv.cols+2-indent)
 
 		j := 0
 		if i == tv.idx {
 			// draw current line cursor from the beginning
 			for j < indent {
-				buf.Set(j+1, printed+1, tui.Cell{' ', fg, bg})
+				if j+1 > tv.pos {
+					buf.Set(j+1-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+				}
 				j++
 			}
 		} else {
 			j = indent
 		}
 
-		if ti.folded {
-			buf.Set(j+1, printed+1, tui.Cell{'+', fg, bg})
-		} else {
-			buf.Set(j+1, printed+1, tui.Cell{'-', fg, bg})
+		if j+1 > tv.pos {
+			if ti.folded {
+				buf.Set(j+1-tv.pos, printed+1, tui.Cell{'+', fg, bg})
+			} else {
+				buf.Set(j+1-tv.pos, printed+1, tui.Cell{'-', fg, bg})
+			}
 		}
-		buf.Set(j+2, printed+1, tui.Cell{' ', fg, bg})
+		if j+2 > tv.pos {
+			buf.Set(j+2-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+		}
 		j += 2
 
 		for _, vv := range cs {
 			w := vv.Width()
-			buf.Set(j+1, printed+1, vv)
+			if j+1 > tv.pos {
+				buf.Set(j+1-tv.pos, printed+1, vv)
+			}
 			j += w
 		}
 
@@ -171,8 +180,10 @@ func (tv *TreeView) Buffer() tui.Buffer {
 		}
 
 		// draw current line cursor to the end
-		for j < tv.cols {
-			buf.Set(j+1, printed, tui.Cell{' ', fg, bg})
+		for j < tv.cols+tv.pos {
+			if j+1 > tv.pos {
+				buf.Set(j+1-tv.pos, printed, tui.Cell{' ', fg, bg})
+			}
 			j++
 		}
 	}
@@ -246,6 +257,17 @@ func (tv *TreeView) End() {
 	if tv.off < 0 {
 		tv.off = 0
 	}
+}
+
+func (tv *TreeView) Left(i int) {
+	tv.pos -= i
+	if tv.pos < 0 {
+		tv.pos = 0
+	}
+}
+
+func (tv *TreeView) Right(i int) {
+	tv.pos += i
 }
 
 func (tv *TreeView) Toggle() {
@@ -363,6 +385,26 @@ func ShowWithTUI(dep *DepsNode) {
 		tv.Up()
 		tui.Render(tv)
 		tui.Render(sl)
+	})
+	tui.Handle("/sys/kbd/<left>", func(tui.Event) {
+		tv.Left(1)
+		tui.Render(tv)
+		// no need to redraw sl
+	})
+	tui.Handle("/sys/kbd/<right>", func(tui.Event) {
+		tv.Right(1)
+		tui.Render(tv)
+		// no need to redraw sl
+	})
+	tui.Handle("/sys/kbd/<", func(tui.Event) {
+		tv.Left(3)
+		tui.Render(tv)
+		// no need to redraw sl
+	})
+	tui.Handle("/sys/kbd/>", func(tui.Event) {
+		tv.Right(3)
+		tui.Render(tv)
+		// no need to redraw sl
 	})
 	tui.Handle("/sys/kbd/<next>", func(tui.Event) {
 		tv.PageDown()
