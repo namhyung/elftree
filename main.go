@@ -149,7 +149,7 @@ func processDep(dep *DepsNode) {
 	deps[dep.name] = info
 }
 
-func printDepTree(n *DepsNode) {
+func printDepTree(n *DepsNode, f *elf.File) {
 	for i := 0; i < n.depth; i++ {
 		fmt.Printf("   ")
 	}
@@ -161,7 +161,11 @@ func printDepTree(n *DepsNode) {
 	}
 
 	for _, v := range n.child {
-		printDepTree(v)
+		printDepTree(v, f)
+	}
+
+	if verbose && n.parent == nil {
+		showDetails(f, deps[n.name].path)
 	}
 }
 
@@ -224,10 +228,6 @@ func main() {
 	if showTui {
 		ShowWithTUI(deps_root)
 	} else {
-		printDepTree(deps_root)
-	}
-
-	if verbose {
-		showDetails(f, pathname)
+		printDepTree(deps_root, f)
 	}
 }
