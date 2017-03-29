@@ -3,6 +3,7 @@ package main
 
 import (
 	"debug/elf"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"os"
@@ -19,7 +20,17 @@ type DepsNode struct {
 }
 
 type DepsInfo struct {
-	path string
+	path   string
+	mach   elf.Machine
+	bits   elf.Class
+	endian binary.ByteOrder
+	kind   elf.Type
+	abi    elf.OSABI
+	ver    uint8
+
+	libs []string
+	dsym []elf.ImportedSymbol
+	syms []elf.Symbol
 }
 
 var (
@@ -83,7 +94,7 @@ func processDep(dep *DepsNode) {
 		return
 	}
 
-	info := DepsInfo{realPath(findLib(dep.name))}
+	info := DepsInfo{path: realPath(findLib(dep.name))}
 
 	if dep.parent == nil {
 		info.path = realPath(flag.Args()[0])
@@ -96,11 +107,32 @@ func processDep(dep *DepsNode) {
 	}
 	defer f.Close()
 
+	info.mach = f.Machine
+	info.bits = f.Class
+	info.kind = f.Type
+	info.abi = f.OSABI
+	info.ver = f.ABIVersion
+	info.endian = f.ByteOrder
+
 	libs, err := f.ImportedLibraries()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
+	dsym, err := f.ImportedSymbols()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	syms, err := f.Symbols()
+	if err == nil {
+		info.syms = syms
+	}
+
+	info.libs = libs
+	info.dsym = dsym
 
 	var L []*DepsNode
 	for _, soname := range libs {
