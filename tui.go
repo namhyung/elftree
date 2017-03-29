@@ -3,7 +3,7 @@ package main
 import tui "github.com/gizak/termui"
 
 type TreeItem struct {
-	node    *DepsNode
+	node    interface{}
 	parent  *TreeItem
 	sibling *TreeItem
 	child   *TreeItem // pointer to first child
@@ -135,8 +135,9 @@ func (tv *TreeView) Buffer() tui.Buffer {
 			tv.Curr = ti
 		}
 
-		indent := 3 * ti.node.depth
-		cs := tui.DefaultTxBuilder.Build(ti.node.name, fg, bg)
+		node := ti.node.(*DepsNode)
+		indent := 3 * node.depth
+		cs := tui.DefaultTxBuilder.Build(node.name, fg, bg)
 		cs = tui.DTrimTxCls(cs, tv.cols+2-indent)
 
 		j := 0
@@ -282,9 +283,10 @@ func (sl *StatusLine) Buffer() tui.Buffer {
 
 	curr := sl.tv.Curr
 	if curr != nil {
-		line = curr.node.name
+		node := curr.node.(*DepsNode)
+		line = node.name
 
-		n := curr.node.parent
+		n := node.parent
 		for n != nil {
 			line = n.name + " > " + line
 
