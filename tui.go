@@ -3,17 +3,19 @@ package main
 import tui "github.com/gizak/termui"
 
 type TreeItem struct {
-	node    interface{}
-	parent  *TreeItem
-	sibling *TreeItem
-	child   *TreeItem // pointer to first child
-	folded  bool
-	total   int // number of (shown) children (not count itself)
+	node   interface{}
+	parent *TreeItem
+	prev   *TreeItem // pointer to siblings
+	next   *TreeItem
+	child  *TreeItem // pointer to first child
+	folded bool
+	total  int // number of (shown) children (not count itself)
 }
 
 type TreeView struct {
 	tui.Block // embedded
 	Root      *TreeItem
+	Top       *TreeItem
 	Curr      *TreeItem
 
 	ItemFgColor  tui.Attribute
@@ -58,11 +60,32 @@ func NewStatusLine(tv *TreeView) *StatusLine {
 	return sl
 }
 
-func (ti *TreeItem) next() *TreeItem {
+func (ti *TreeItem) prevItem() *TreeItem {
+	if ti.prev == nil {
+		return ti.parent
+	}
+
+	ti = ti.prev
+
+	// find last child of previous sibling
+	for ti != nil {
+		if ti.child == nil || ti.folded {
+			return ti
+		}
+
+		ti = ti.child
+		for ti.next != nil {
+			ti = ti.next
+		}
+	}
+	return nil
+}
+
+func (ti *TreeItem) nextItem() *TreeItem {
 	if ti.child == nil || ti.folded {
 		for ti != nil {
-			if ti.sibling != nil {
-				return ti.sibling
+			if ti.next != nil {
+				return ti.next
 			}
 
 			ti = ti.parent
@@ -77,7 +100,7 @@ func (ti *TreeItem) expand() {
 		return
 	}
 
-	for c := ti.child; c != nil; c = c.sibling {
+	for c := ti.child; c != nil; c = c.next {
 		ti.total += c.total + 1
 	}
 
@@ -195,22 +218,28 @@ func (tv *TreeView) Buffer() tui.Buffer {
 func (tv *TreeView) Down() {
 	if tv.idx < tv.Root.total {
 		tv.idx++
+		tv.Curr = tv.Curr.nextItem()
 	}
 	if tv.idx-tv.off >= tv.rows {
 		tv.off++
+		tv.Top = tv.Top.nextItem()
 	}
 }
 
 func (tv *TreeView) Up() {
 	if tv.idx > 0 {
 		tv.idx--
+		tv.Curr = tv.Curr.prevItem()
 	}
 	if tv.idx < tv.off {
 		tv.off = tv.idx
+		tv.Top = tv.Curr
 	}
 }
 
 func (tv *TreeView) PageDown() {
+	idx := tv.idx
+
 	bottom := tv.off + tv.rows - 1
 	if bottom > tv.Root.total {
 		bottom = tv.Root.total
@@ -219,6 +248,11 @@ func (tv *TreeView) PageDown() {
 	// At first, move to the bottom of current page
 	if tv.idx != bottom {
 		tv.idx = bottom
+
+		for idx != bottom {
+			tv.Curr = tv.Curr.nextItem()
+			idx++
+		}
 		return
 	}
 
@@ -226,15 +260,31 @@ func (tv *TreeView) PageDown() {
 	if tv.idx > tv.Root.total {
 		tv.idx = tv.Root.total
 	}
+
+	for idx != tv.idx {
+		tv.Curr = tv.Curr.nextItem()
+		idx++
+	}
+
+	off := tv.off
+
 	if tv.idx-tv.off >= tv.rows {
 		tv.off = tv.idx - tv.rows + 1
+
+		for off != tv.off {
+			tv.Top = tv.Top.nextItem()
+			off++
+		}
 	}
 }
 
 func (tv *TreeView) PageUp() {
+	idx := tv.idx
+
 	// At first, move to the top of current page
 	if tv.idx != tv.off {
 		tv.idx = tv.off
+		tv.Curr = tv.Top
 		return
 	}
 
@@ -244,11 +294,20 @@ func (tv *TreeView) PageUp() {
 	}
 
 	tv.off = tv.idx
+
+	for idx != tv.idx {
+		tv.Curr = tv.Curr.prevItem()
+		idx--
+	}
+
+	tv.Top = tv.Curr
 }
 
 func (tv *TreeView) Home() {
 	tv.idx = 0
 	tv.off = 0
+	tv.Curr = tv.Root
+	tv.Top = tv.Root
 }
 
 func (tv *TreeView) End() {
@@ -258,6 +317,20 @@ func (tv *TreeView) End() {
 	if tv.off < 0 {
 		tv.off = 0
 	}
+
+	for next := tv.Curr; next != nil; next = next.nextItem() {
+		tv.Curr = next
+	}
+
+	off := tv.idx
+	top := tv.Curr
+
+	for off != tv.off {
+		top = top.prevItem()
+		off--
+	}
+
+	tv.Top = top
 }
 
 func (tv *TreeView) Left(i int) {
@@ -355,6 +428,7 @@ func ShowWithTUI(dep *DepsNode) {
 	tv.Width = tui.TermWidth()
 	tv.Root = root
 	tv.Curr = root
+	tv.Top = root
 
 	tv.rows = tv.Height - 2 // exclude border at top and bottom
 	tv.cols = tv.Width - 2  // exclude border at left and right
