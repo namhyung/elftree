@@ -31,6 +31,15 @@ type TreeView struct {
 	cols int
 }
 
+type FileInfo struct {
+	Root *TreeItem
+	idx  int
+	off  int
+	pos  int
+}
+
+var finfo map[string]FileInfo
+
 type StatusLine struct {
 	tui.Block // embedded
 	tv        *TreeView
@@ -41,10 +50,6 @@ func NewTreeView() *TreeView {
 
 	tv.ItemFgColor = tui.ThemeAttr("list.item.fg")
 	tv.ItemBgColor = tui.ThemeAttr("list.item.bg")
-	tv.FocusFgColor = tui.ColorYellow
-	tv.FocusBgColor = tui.ColorBlue
-
-	tv.BorderLabel = "ELF Tree"
 
 	tv.idx = 0
 	tv.off = 0
@@ -132,6 +137,96 @@ func (ti *TreeItem) toggle() {
 	}
 }
 
+func (tv *TreeView) drawDepsNode(buf tui.Buffer, dn *DepsNode, i, printed int, folded bool) {
+	fg := tv.ItemFgColor
+	bg := tv.ItemBgColor
+	if i == tv.idx {
+		fg = tv.FocusFgColor
+		bg = tv.FocusBgColor
+	}
+
+	indent := 3 * dn.depth
+	text_width := tv.cols - 2 - indent
+
+	if text_width < 0 {
+		text_width = 0
+	}
+
+	cs := tui.DefaultTxBuilder.Build(dn.name, fg, bg)
+	cs = tui.DTrimTxCls(cs, text_width)
+
+	j := 0
+	if i == tv.idx {
+		// draw current line cursor from the beginning
+		for j < indent {
+			if j+1 > tv.pos {
+				buf.Set(j+1-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+			}
+			j++
+		}
+	} else {
+		j = indent
+	}
+
+	if j+1 > tv.pos {
+		if folded {
+			buf.Set(j+1-tv.pos, printed+1, tui.Cell{'+', fg, bg})
+		} else {
+			buf.Set(j+1-tv.pos, printed+1, tui.Cell{'-', fg, bg})
+		}
+	}
+	if j+2 > tv.pos {
+		buf.Set(j+2-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+	}
+	j += 2
+
+	for _, vv := range cs {
+		w := vv.Width()
+		if j+1 > tv.pos {
+			buf.Set(j+1-tv.pos, printed+1, vv)
+		}
+		j += w
+	}
+
+	if i != tv.idx {
+		return
+	}
+
+	// draw current line cursor to the end
+	for j < tv.cols+tv.pos {
+		if j+1 > tv.pos {
+			buf.Set(j+1-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+		}
+		j++
+	}
+}
+
+func (tv *TreeView) drawStrNode(buf tui.Buffer, s string, i, printed int) {
+	fg := tv.ItemFgColor
+	bg := tv.ItemBgColor
+
+	cs := tui.DefaultTxBuilder.Build(s, fg, bg)
+	cs = tui.DTrimTxCls(cs, tv.cols-2)
+
+	j := tv.X
+
+	if j+1 > tv.pos {
+		buf.Set(j+1-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+	}
+	if j+2 > tv.pos {
+		buf.Set(j+2-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+	}
+	j += 2
+
+	for _, vv := range cs {
+		w := vv.Width()
+		if j+1 > tv.pos {
+			buf.Set(j+1-tv.pos, printed+1, vv)
+		}
+		j += w
+	}
+}
+
 // Buffer implements Bufferer interface.
 func (tv *TreeView) Buffer() tui.Buffer {
 	buf := tv.Block.Buffer()
@@ -140,7 +235,7 @@ func (tv *TreeView) Buffer() tui.Buffer {
 	printed := 0
 
 	var ti *TreeItem
-	for ti = tv.Root; ti != nil; ti = ti.next() {
+	for ti = tv.Root; ti != nil; ti = ti.nextItem() {
 		if i < tv.off {
 			i++
 			continue
@@ -149,66 +244,16 @@ func (tv *TreeView) Buffer() tui.Buffer {
 			break
 		}
 
-		fg := tv.ItemFgColor
-		bg := tv.ItemBgColor
-		if i == tv.idx {
-			fg = tv.FocusFgColor
-			bg = tv.FocusBgColor
-
-			tv.Curr = ti
-		}
-
-		node := ti.node.(*DepsNode)
-		indent := 3 * node.depth
-		cs := tui.DefaultTxBuilder.Build(node.name, fg, bg)
-		cs = tui.DTrimTxCls(cs, tv.cols+2-indent)
-
-		j := 0
-		if i == tv.idx {
-			// draw current line cursor from the beginning
-			for j < indent {
-				if j+1 > tv.pos {
-					buf.Set(j+1-tv.pos, printed+1, tui.Cell{' ', fg, bg})
-				}
-				j++
-			}
-		} else {
-			j = indent
-		}
-
-		if j+1 > tv.pos {
-			if ti.folded {
-				buf.Set(j+1-tv.pos, printed+1, tui.Cell{'+', fg, bg})
-			} else {
-				buf.Set(j+1-tv.pos, printed+1, tui.Cell{'-', fg, bg})
-			}
-		}
-		if j+2 > tv.pos {
-			buf.Set(j+2-tv.pos, printed+1, tui.Cell{' ', fg, bg})
-		}
-		j += 2
-
-		for _, vv := range cs {
-			w := vv.Width()
-			if j+1 > tv.pos {
-				buf.Set(j+1-tv.pos, printed+1, vv)
-			}
-			j += w
-		}
-
-		printed++
-		i++
-
-		if i != tv.idx+1 {
-			continue
-		}
-
-		// draw current line cursor to the end
-		for j < tv.cols+tv.pos {
-			if j+1 > tv.pos {
-				buf.Set(j+1-tv.pos, printed, tui.Cell{' ', fg, bg})
-			}
-			j++
+		switch node := ti.node.(type) {
+		case *DepsNode:
+			tv.drawDepsNode(buf, node, i, printed, ti.folded)
+			printed++
+			i++
+		case string:
+			tv.drawStrNode(buf, node, i, printed)
+			printed++
+			i++
+		default:
 		}
 	}
 
@@ -394,18 +439,19 @@ func (sl *StatusLine) Buffer() tui.Buffer {
 	return buf
 }
 
-func makeItems(dep *DepsNode, parent *TreeItem) *TreeItem {
+func makeDepsItems(dep *DepsNode, parent *TreeItem) *TreeItem {
 	item := &TreeItem{node: dep, parent: parent, folded: false, total: len(dep.child)}
 
 	var prev *TreeItem
 	for _, v := range dep.child {
-		c := makeItems(v, item)
+		c := makeDepsItems(v, item)
 
 		if item.child == nil {
 			item.child = c
 		}
 		if prev != nil {
-			prev.sibling = c
+			prev.next = c
+			c.prev = prev
 		}
 		prev = c
 
@@ -414,32 +460,110 @@ func makeItems(dep *DepsNode, parent *TreeItem) *TreeItem {
 	return item
 }
 
+func makeInfoItems(name string, info *DepsInfo) FileInfo {
+	root := &TreeItem{node: name, total: 5}
+
+	var prev *TreeItem
+	var p *TreeItem
+
+	prev = root
+	prev.child = &TreeItem{node: "", parent: root}
+	prev = prev.child
+
+	prev.next = &TreeItem{node: "File Info", parent: root, total: 3}
+	prev.next.prev = prev
+	prev = prev.next
+
+	p = prev
+	p.child = &TreeItem{node: "  Path: " + info.path, parent: p}
+	prev = p.child
+
+	prev.next = &TreeItem{node: "  Type: " + info.kind.String() + ", " + info.mach.String(), parent: p}
+	prev = prev.next
+
+	prev.next = &TreeItem{node: "  Data: " + info.bits.String() + ", " + info.endian.String(), parent: p}
+	prev = prev.next
+
+	return FileInfo{Root: root}
+}
+
+func saveInfoView(tv, iv *TreeView) {
+	curr := tv.Curr
+	node := curr.node.(*DepsNode)
+
+	info := finfo[node.name]
+
+	info.off = iv.off
+	info.idx = iv.idx
+	info.pos = iv.pos
+}
+
+func restoreInfoView(tv, iv *TreeView) {
+	curr := tv.Curr
+	node := curr.node.(*DepsNode)
+
+	info := finfo[node.name]
+
+	iv.Root = info.Root
+
+	iv.off = info.off
+	iv.idx = info.idx
+	iv.pos = info.pos
+}
+
+func resize(tv, iv *TreeView, sl *StatusLine) {
+	tv.Height = tui.TermHeight() - 1
+	tv.Width = tui.TermWidth() * 3 / 5
+
+	tv.rows = tv.Height - 2 // exclude border at top and bottom
+	tv.cols = tv.Width - 2  // exclude border at left and right
+
+	iv.Height = tui.TermHeight() - 1
+	iv.Width = tui.TermWidth() - tv.Width
+	iv.X = tv.Width
+
+	iv.rows = iv.Height - 2
+	iv.cols = iv.Width - 2
+
+	sl.Height = 1
+	sl.Width = tui.TermWidth()
+	sl.Y = tui.TermHeight() - 1
+}
+
 func ShowWithTUI(dep *DepsNode) {
 	if err := tui.Init(); err != nil {
 		panic(err)
 	}
 	defer tui.Close()
 
-	root := makeItems(dep, nil)
+	root := makeDepsItems(dep, nil)
 
 	tv := NewTreeView()
 
-	tv.Height = tui.TermHeight() - 1
-	tv.Width = tui.TermWidth()
 	tv.Root = root
 	tv.Curr = root
 	tv.Top = root
 
-	tv.rows = tv.Height - 2 // exclude border at top and bottom
-	tv.cols = tv.Width - 2  // exclude border at left and right
+	tv.FocusFgColor = tui.ColorYellow
+	tv.FocusBgColor = tui.ColorBlue
 
-	tui.Render(tv)
+	tv.BorderLabel = "ELF Tree"
+
+	iv := NewTreeView()
 
 	sl := NewStatusLine(tv)
-	sl.Height = 1
-	sl.Width = tui.TermWidth()
-	sl.Y = tui.TermHeight() - 1
 
+	finfo = make(map[string]FileInfo)
+	for k, v := range deps {
+		finfo[k] = makeInfoItems(k, &v)
+	}
+
+	restoreInfoView(tv, iv)
+
+	resize(tv, iv, sl)
+
+	tui.Render(tv)
+	tui.Render(iv)
 	tui.Render(sl)
 
 	// handle key pressing
@@ -453,14 +577,24 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 
 	tui.Handle("/sys/kbd/<down>", func(tui.Event) {
+		saveInfoView(tv, iv)
 		tv.Down()
+		restoreInfoView(tv, iv)
+
 		tui.Render(tv)
+		tui.Render(iv)
 		tui.Render(sl)
+
 	})
 	tui.Handle("/sys/kbd/<up>", func(tui.Event) {
+		saveInfoView(tv, iv)
 		tv.Up()
+		restoreInfoView(tv, iv)
+
 		tui.Render(tv)
+		tui.Render(iv)
 		tui.Render(sl)
+
 	})
 	tui.Handle("/sys/kbd/<left>", func(tui.Event) {
 		tv.Left(1)
@@ -483,23 +617,39 @@ func ShowWithTUI(dep *DepsNode) {
 		// no need to redraw sl
 	})
 	tui.Handle("/sys/kbd/<next>", func(tui.Event) {
+		saveInfoView(tv, iv)
 		tv.PageDown()
+		restoreInfoView(tv, iv)
+
 		tui.Render(tv)
+		tui.Render(iv)
 		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/<previous>", func(tui.Event) {
+		saveInfoView(tv, iv)
 		tv.PageUp()
+		restoreInfoView(tv, iv)
+
 		tui.Render(tv)
+		tui.Render(iv)
 		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/<home>", func(tui.Event) {
+		saveInfoView(tv, iv)
 		tv.Home()
+		restoreInfoView(tv, iv)
+
 		tui.Render(tv)
+		tui.Render(iv)
 		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/<end>", func(tui.Event) {
+		saveInfoView(tv, iv)
 		tv.End()
+		restoreInfoView(tv, iv)
+
 		tui.Render(tv)
+		tui.Render(iv)
 		tui.Render(sl)
 	})
 
@@ -510,14 +660,10 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 
 	tui.Handle("/sys/wnd/resize", func(tui.Event) {
-		tv.Height = tui.TermHeight() - 1
-		tv.Width = tui.TermWidth()
-		tv.rows = tv.Height - 2
-		tv.cols = tv.Width - 2
-		tui.Render(tv)
+		resize(tv, iv, sl)
 
-		sl.Width = tui.TermWidth()
-		sl.Y = tui.TermHeight() - 1
+		tui.Render(tv)
+		tui.Render(iv)
 		tui.Render(sl)
 	})
 
