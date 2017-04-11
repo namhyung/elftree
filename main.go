@@ -31,6 +31,7 @@ type DepsInfo struct {
 	libs []string
 	dsym []elf.ImportedSymbol
 	syms []elf.Symbol
+	prog []*elf.Prog
 }
 
 var (
@@ -113,6 +114,8 @@ func processDep(dep *DepsNode) {
 	info.abi = f.OSABI
 	info.ver = f.ABIVersion
 	info.endian = f.ByteOrder
+
+	info.prog = f.Progs
 
 	libs, err := f.ImportedLibraries()
 	if err != nil {

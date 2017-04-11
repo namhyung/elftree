@@ -1,6 +1,10 @@
 package main
 
-import tui "github.com/gizak/termui"
+import (
+	"debug/elf"
+	"fmt"
+	tui "github.com/gizak/termui"
+)
 
 type TreeItem struct {
 	node   interface{}
@@ -460,8 +464,49 @@ func makeDepsItems(dep *DepsNode, parent *TreeItem) *TreeItem {
 	return item
 }
 
+const (
+	GNU_EH_FRAME = elf.PT_LOOS + 74769744
+	GNU_STACK    = elf.PT_LOOS + 74769745
+	GNU_RELRO    = elf.PT_LOOS + 74769746
+)
+
+func progHdrString(phdr *elf.Prog) string {
+	var typeStr string
+	var flagStr string
+
+	switch phdr.Type {
+	case GNU_EH_FRAME:
+		typeStr = "GNU_EH_FRAME"
+	case GNU_STACK:
+		typeStr = "GNU_STACK"
+	case GNU_RELRO:
+		typeStr = "GNU_RELRO"
+	default:
+		typeStr = phdr.Type.String()[3:]
+	}
+
+	switch phdr.Flags {
+	case elf.PF_X:
+		flagStr = "__X"
+	case elf.PF_W:
+		flagStr = "_W_"
+	case elf.PF_R:
+		flagStr = "R__"
+	case elf.PF_R | elf.PF_W:
+		flagStr = "RW_"
+	case elf.PF_R | elf.PF_X:
+		flagStr = "R_X"
+	case elf.PF_R | elf.PF_W | elf.PF_X:
+		flagStr = "RWX"
+	default:
+		flagStr = "???"
+	}
+
+	return fmt.Sprintf("%-16s  %s    %#8x  %#8x  %#8x", typeStr, flagStr, phdr.Vaddr, phdr.Memsz, phdr.Align)
+}
+
 func makeInfoItems(name string, info *DepsInfo) FileInfo {
-	root := &TreeItem{node: name, total: 5}
+	root := &TreeItem{node: name, total: 7}
 
 	var prev *TreeItem
 	var p *TreeItem
@@ -482,7 +527,30 @@ func makeInfoItems(name string, info *DepsInfo) FileInfo {
 	prev = prev.next
 
 	prev.next = &TreeItem{node: "  Data: " + info.bits.String() + ", " + info.endian.String(), parent: p}
+	prev = prev.parent
+
+	prev.next = &TreeItem{node: "", parent: root}
+	prev.next.prev = prev
 	prev = prev.next
+
+	prev.next = &TreeItem{node: "Program Info       flags      vaddr      size     align",
+		parent: root, total: len(info.prog)}
+	prev.next.prev = prev
+	prev = prev.next
+
+	root.total += len(info.prog)
+
+	p = prev
+	for _, v := range info.prog {
+		if p.child == nil {
+			p.child = &TreeItem{node: "  " + progHdrString(v), parent: p}
+			prev = p.child
+		} else {
+			prev.next = &TreeItem{node: "  " + progHdrString(v), parent: p}
+			prev.next.prev = prev
+			prev = prev.next
+		}
+	}
 
 	return FileInfo{Root: root}
 }
