@@ -126,6 +126,10 @@ func findLib(name string) string {
 }
 
 func realPath(pathname string) string {
+	if pathname == "" {
+		return ""
+	}
+
 	relpath, _ := filepath.EvalSymlinks(pathname)
 	abspath, _ := filepath.Abs(relpath)
 
