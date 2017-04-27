@@ -100,9 +100,25 @@ func init() {
 	flag.BoolVar(&showTui, "tui", false, "Show it with TUI")
 }
 
-func findLib(name string) string {
+// search shared libraries as described in `man ld.so(8)`
+func findLib(name string, parent *DepsNode) string {
 	if strings.Contains(name, "/") {
 		return name
+	}
+
+	// check DT_RPATH attribute
+	if parent != nil {
+		info := deps[parent.name]
+		for _, dyn := range info.dyns {
+			if dyn.tag != elf.DT_RPATH {
+				continue
+			}
+
+			fullpath := path.Join(dyn.val.(string), name)
+			if _, err := os.Stat(fullpath); err == nil {
+				return fullpath
+			}
+		}
 	}
 
 	// check LD_LIBRARY_PATH environ
@@ -110,6 +126,21 @@ func findLib(name string) string {
 		fullpath := path.Join(libpath, name)
 		if _, err := os.Stat(fullpath); err == nil {
 			return fullpath
+		}
+	}
+
+	// check DT_RUNPATH attribute
+	if parent != nil {
+		info := deps[parent.name]
+		for _, dyn := range info.dyns {
+			if dyn.tag != elf.DT_RUNPATH {
+				continue
+			}
+
+			fullpath := path.Join(dyn.val.(string), name)
+			if _, err := os.Stat(fullpath); err == nil {
+				return fullpath
+			}
 		}
 	}
 
@@ -169,6 +200,7 @@ func readDynamic(f *elf.File, info *DepsInfo) {
 	count = uint(dyn.Size / dyn.Entsize)
 	for i = 0; i < count; i++ {
 		var tag, val uint64
+
 		if f.Class == elf.ELFCLASS64 {
 			tag = f.ByteOrder.Uint64(data[(i*2+0)*8 : (i*2+1)*8])
 			val = f.ByteOrder.Uint64(data[(i*2+1)*8 : (i*2+2)*8])
@@ -202,7 +234,7 @@ func processDep(dep *DepsNode) {
 		return
 	}
 
-	info := DepsInfo{path: realPath(findLib(dep.name))}
+	info := DepsInfo{path: realPath(findLib(dep.name, dep.parent))}
 
 	if dep.parent == nil {
 		info.path = realPath(flag.Args()[0])
