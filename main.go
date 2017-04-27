@@ -91,7 +91,7 @@ func readLdSoConf(name string, libpath []string) {
 
 func init() {
 	deps = make(map[string]DepsInfo)
-	deflib = []string{"/lib/", "/usr/lib/"}
+	deflib = []string{"/lib/", "/usr/lib/", "/lib64", "/usr/lib64"}
 	envlib = os.Getenv("LD_LIBRARY_PATH")
 	readLdSoConf("/etc/ld.so.conf", conflib)
 
