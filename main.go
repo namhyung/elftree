@@ -150,7 +150,7 @@ func processDep(dep *DepsNode) {
 
 	f, err := elf.Open(info.path)
 	if err != nil {
-		fmt.Printf("%v: %s\n", err, info.path)
+		fmt.Printf("%v: %s (%s)\n", err, info.path, dep.name)
 		os.Exit(1)
 	}
 	defer f.Close()
