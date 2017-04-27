@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bufio"
 	"debug/elf"
 	"encoding/binary"
 	"flag"
@@ -40,6 +41,7 @@ var (
 	deps_root *DepsNode
 	deflib    []string
 	envlib    string
+	conflib   []string
 )
 
 // command-line options
@@ -49,10 +51,43 @@ var (
 	showTui  bool
 )
 
+func readLdSoConf(name string, libpath []string) {
+	f, err := os.Open(name)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		t := s.Text()
+
+		if len(strings.TrimSpace(t)) == 0 {
+			continue
+		}
+		if strings.HasPrefix(t, "#") {
+			continue
+		}
+
+		if strings.HasPrefix(t, "include") {
+			libs, err := filepath.Glob(t[8:])
+			if err != nil {
+				continue
+			}
+			for _, l := range libs {
+				readLdSoConf(l, libpath)
+			}
+		} else {
+			libpath = append(libpath, t)
+		}
+	}
+}
+
 func init() {
 	deps = make(map[string]DepsInfo)
 	deflib = []string{"/lib/", "/usr/lib/"}
 	envlib = os.Getenv("LD_LIBRARY_PATH")
+	readLdSoConf("/etc/ld.so.conf", conflib)
 
 	flag.BoolVar(&verbose, "v", false, "Show binary info")
 	flag.BoolVar(&showPath, "p", false, "Show library path")
@@ -66,6 +101,14 @@ func findLib(name string) string {
 
 	// check LD_LIBRARY_PATH environ
 	for _, libpath := range strings.Split(envlib, ":") {
+		fullpath := path.Join(libpath, name)
+		if _, err := os.Stat(fullpath); err == nil {
+			return fullpath
+		}
+	}
+
+	// check libraries in /etc/ld.so.conf
+	for _, libpath := range conflib {
 		fullpath := path.Join(libpath, name)
 		if _, err := os.Stat(fullpath); err == nil {
 			return fullpath
