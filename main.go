@@ -20,6 +20,11 @@ type DepsNode struct {
 	depth  int
 }
 
+type DynInfo struct {
+	tag elf.DynTag
+	val interface{}
+}
+
 type DepsInfo struct {
 	path   string
 	mach   elf.Machine
@@ -33,6 +38,7 @@ type DepsInfo struct {
 	dsym []elf.ImportedSymbol
 	syms []elf.Symbol
 	prog []*elf.Prog
+	dyns []DynInfo
 }
 
 var (
@@ -136,6 +142,60 @@ func realPath(pathname string) string {
 	return abspath
 }
 
+func readElfString(strtab []byte, i uint64) string {
+	var len uint64
+
+	for len = 0; strtab[i+len] != '\x00'; len++ {
+		continue
+	}
+
+	return string(strtab[i : i+len])
+}
+
+func readDynamic(f *elf.File, info *DepsInfo) {
+	var i, count uint
+
+	dyn := f.Section(".dynamic")
+	data, err := dyn.Data()
+	if err != nil {
+		return
+	}
+	str := f.Section(".dynstr")
+	stab, err := str.Data()
+	if err != nil {
+		return
+	}
+
+	count = uint(dyn.Size / dyn.Entsize)
+	for i = 0; i < count; i++ {
+		var tag, val uint64
+		if f.Class == elf.ELFCLASS64 {
+			tag = f.ByteOrder.Uint64(data[(i*2+0)*8 : (i*2+1)*8])
+			val = f.ByteOrder.Uint64(data[(i*2+1)*8 : (i*2+2)*8])
+		} else {
+			tag = uint64(f.ByteOrder.Uint32(data[(i*2+0)*4 : (i*2+1)*4]))
+			val = uint64(f.ByteOrder.Uint32(data[(i*2+1)*4 : (i*2+2)*4]))
+		}
+
+		dtag := elf.DynTag(tag)
+		switch dtag {
+		case elf.DT_NEEDED:
+			fallthrough
+		case elf.DT_RPATH:
+			fallthrough
+		case elf.DT_RUNPATH:
+			fallthrough
+		case elf.DT_SONAME:
+			sval := readElfString(stab, val)
+			info.dyns = append(info.dyns, DynInfo{dtag, sval})
+			break
+		default:
+			info.dyns = append(info.dyns, DynInfo{dtag, val})
+			break
+		}
+	}
+}
+
 func processDep(dep *DepsNode) {
 	// skip duplicate libraries
 	if _, ok := deps[dep.name]; ok {
@@ -163,6 +223,8 @@ func processDep(dep *DepsNode) {
 	info.endian = f.ByteOrder
 
 	info.prog = f.Progs
+
+	readDynamic(f, &info)
 
 	libs, err := f.ImportedLibraries()
 	if err != nil {
