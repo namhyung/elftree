@@ -183,18 +183,22 @@ func readElfString(strtab []byte, i uint64) string {
 	return string(strtab[i : i+len])
 }
 
-func readDynamic(f *elf.File, info *DepsInfo) {
+func readDynamic(f *elf.File, info *DepsInfo) int {
 	var i, count uint
 
 	dyn := f.Section(".dynamic")
+	if dyn == nil {
+		return -1
+	}
+
 	data, err := dyn.Data()
 	if err != nil {
-		return
+		return -1
 	}
 	str := f.Section(".dynstr")
 	stab, err := str.Data()
 	if err != nil {
-		return
+		return -1
 	}
 
 	count = uint(dyn.Size / dyn.Entsize)
@@ -228,6 +232,7 @@ func readDynamic(f *elf.File, info *DepsInfo) {
 			break
 		}
 	}
+	return 0
 }
 
 func processDep(dep *DepsNode) {
@@ -258,7 +263,15 @@ func processDep(dep *DepsNode) {
 
 	info.prog = f.Progs
 
-	readDynamic(f, &info)
+	if f.Type != elf.ET_EXEC && f.Type != elf.ET_DYN {
+		fmt.Printf("elftree: `%s` seems not to be a valid ELF executable\n", dep.name)
+		os.Exit(1)
+	}
+
+	if readDynamic(f, &info) < 0 {
+		fmt.Printf("elftree: `%s` seems to be statically linked\n", dep.name)
+		os.Exit(1)
+	}
 
 	libs, err := f.ImportedLibraries()
 	if err != nil {
@@ -354,7 +367,11 @@ func main() {
 	pathname := args[0]
 	f, err := elf.Open(pathname)
 	if err != nil {
-		fmt.Printf("%v: %s\n", err, pathname)
+		if strings.HasPrefix(err.Error(), "bad magic number") {
+			fmt.Printf("elftree: `%s` is not an ELF file\n", pathname)
+		} else {
+			fmt.Printf("elftree: %v: %s\n", err, pathname)
+		}
 		os.Exit(1)
 	}
 	defer f.Close()
