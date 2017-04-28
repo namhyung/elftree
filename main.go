@@ -52,9 +52,10 @@ var (
 
 // command-line options
 var (
-	verbose  bool
-	showPath bool
-	showTui  bool
+	verbose   bool
+	showPath  bool
+	showTui   bool
+	showStdio bool
 )
 
 func readLdSoConf(name string, libpath []string) {
@@ -97,7 +98,8 @@ func init() {
 
 	flag.BoolVar(&verbose, "v", false, "Show binary info")
 	flag.BoolVar(&showPath, "p", false, "Show library path")
-	flag.BoolVar(&showTui, "tui", false, "Show it with TUI")
+	flag.BoolVar(&showTui, "tui", true, "Show it with TUI")
+	flag.BoolVar(&showStdio, "stdio", false, "Show it on standard IO")
 }
 
 // search shared libraries as described in `man ld.so(8)`
@@ -386,6 +388,10 @@ func main() {
 		deps_list = deps_list[1:]
 
 		processDep(dep)
+	}
+
+	if showStdio {
+		showTui = false
 	}
 
 	if showTui {
