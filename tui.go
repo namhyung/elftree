@@ -505,52 +505,58 @@ func progHdrString(phdr *elf.Prog) string {
 	return fmt.Sprintf("%-16s  %s    %#8x  %#8x  %#8x", typeStr, flagStr, phdr.Vaddr, phdr.Memsz, phdr.Align)
 }
 
-func makeInfoItems(name string, info *DepsInfo) FileInfo {
-	root := &TreeItem{node: name, total: 7}
+func AddSubTree(name string, items []string, parent *TreeItem) {
+	var t, p *TreeItem
 
-	var prev *TreeItem
-	var p *TreeItem
+	t = &TreeItem{node: name, parent: parent}
 
-	prev = root
-	prev.child = &TreeItem{node: "", parent: root}
-	prev = prev.child
-
-	prev.next = &TreeItem{node: "File Info", parent: root, total: 3}
-	prev.next.prev = prev
-	prev = prev.next
-
-	p = prev
-	p.child = &TreeItem{node: "  Path: " + info.path, parent: p}
-	prev = p.child
-
-	prev.next = &TreeItem{node: "  Type: " + info.kind.String() + ", " + info.mach.String(), parent: p}
-	prev = prev.next
-
-	prev.next = &TreeItem{node: "  Data: " + info.bits.String() + ", " + info.endian.String(), parent: p}
-	prev = prev.parent
-
-	prev.next = &TreeItem{node: "", parent: root}
-	prev.next.prev = prev
-	prev = prev.next
-
-	prev.next = &TreeItem{node: "Program Info       flags      vaddr      size     align",
-		parent: root, total: len(info.prog)}
-	prev.next.prev = prev
-	prev = prev.next
-
-	root.total += len(info.prog)
-
-	p = prev
-	for _, v := range info.prog {
-		if p.child == nil {
-			p.child = &TreeItem{node: "  " + progHdrString(v), parent: p}
-			prev = p.child
-		} else {
-			prev.next = &TreeItem{node: "  " + progHdrString(v), parent: p}
-			prev.next.prev = prev
-			prev = prev.next
+	if parent.child == nil {
+		parent.child = t
+	} else {
+		p = parent.child
+		for p.next != nil {
+			p = p.next
 		}
+
+		p.next = t
+		t.prev = p
 	}
+
+	p = nil
+	parent = t
+	for _, item := range items {
+		t = &TreeItem{node: item, parent: parent}
+
+		if p == nil {
+			parent.child = t
+		} else {
+			p.next = t
+			t.prev = p
+		}
+
+		p = t
+	}
+
+	parent.total += len(items) + 1
+}
+
+func makeInfoItems(name string, info *DepsInfo) FileInfo {
+	root := &TreeItem{node: name}
+
+	// general file info
+	AddSubTree("", nil, root)
+	AddSubTree("File Info", []string{"  Path: " + info.path,
+		"  Type: " + info.kind.String() + ", " + info.mach.String(),
+		"  Data: " + info.bits.String() + ", " + info.endian.String()},
+		root)
+
+	// program headers
+	var phdr []string
+	for _, v := range info.prog {
+		phdr = append(phdr, "  "+progHdrString(v))
+	}
+	AddSubTree("", nil, root)
+	AddSubTree("Program Info       flags      vaddr      size     align", phdr, root)
 
 	return FileInfo{Root: root}
 }
