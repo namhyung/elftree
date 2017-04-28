@@ -3,7 +3,7 @@
 Show library dependency of an ELF binary in a tree form.  It supports
 folding and expanding subtree and shows related information.
 
-![screenshot](https://github.com/namhyung/elftree/screenshot.png)
+![screenshot](https://github.com/namhyung/elftree/blob/master/screenshot.png)
 
     $ elftree
     Usage: elftree [<options>] <executable>
@@ -12,9 +12,9 @@ folding and expanding subtree and shows related information.
     Usage of elftree:
       -p	Show library path
       -stdio
-        	Show it on standard IO
+		Show it on standard IO
       -tui
-         	Show it with TUI (default true)
+		Show it with TUI (default true)
       -v	Show binary info
 
     $ elftree -stdio `which firefox`
