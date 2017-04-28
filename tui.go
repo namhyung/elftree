@@ -558,6 +558,27 @@ func makeInfoItems(name string, info *DepsInfo) FileInfo {
 	AddSubTree("", nil, root)
 	AddSubTree("Program Info       flags      vaddr      size     align", phdr, root)
 
+	// dynamic attributes
+	var dyns []string
+	for _, v := range info.dyns {
+		switch v.tag {
+		case elf.DT_NEEDED:
+			fallthrough
+		case elf.DT_RPATH:
+			fallthrough
+		case elf.DT_RUNPATH:
+			fallthrough
+		case elf.DT_SONAME:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %s", v.tag, v.val.(string)))
+			break
+		default:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %x", v.tag, v.val))
+			break
+		}
+	}
+	AddSubTree("", nil, root)
+	AddSubTree("Dynamic Info", dyns, root)
+
 	return FileInfo{Root: root}
 }
 
