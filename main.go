@@ -211,6 +211,8 @@ func readDynamic(f *elf.File, info *DepsInfo) {
 
 		dtag := elf.DynTag(tag)
 		switch dtag {
+		case elf.DT_NULL:
+			break
 		case elf.DT_NEEDED:
 			fallthrough
 		case elf.DT_RPATH:
