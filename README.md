@@ -5,6 +5,8 @@ folding and expanding subtree and shows related information.
 
 ![screenshot](https://github.com/namhyung/elftree/blob/master/screenshot.png)
 
+## Usage
+
     $ elftree
     Usage: elftree [<options>] <executable>
 
@@ -38,3 +40,8 @@ folding and expanding subtree and shows related information.
        libgcc_s.so.1
        libc.so.6
        ld-linux-x86-64.so.2
+
+## How to install
+If you have golang environment setup:
+
+    $ go get github.com/namhyung/elftree
