@@ -45,3 +45,9 @@ folding and expanding subtree and shows related information.
 If you have golang environment setup:
 
     $ go get github.com/namhyung/elftree
+
+Or, just download the binary:
+
+    $ wget https://github.com/namhyung/elftree/releases/download/v0.1/elftree-linux-amd64
+    $ sudo install -D elftree-linux-amd64 /usr/local/bin/elftree
+
