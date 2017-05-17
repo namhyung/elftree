@@ -58,10 +58,10 @@ var (
 	showStdio bool
 )
 
-func readLdSoConf(name string, libpath []string) {
+func readLdSoConf(name string, libpath []string) []string {
 	f, err := os.Open(name)
 	if err != nil {
-		return
+		return libpath
 	}
 	defer f.Close()
 
@@ -82,19 +82,20 @@ func readLdSoConf(name string, libpath []string) {
 				continue
 			}
 			for _, l := range libs {
-				readLdSoConf(l, libpath)
+				libpath = readLdSoConf(l, libpath)
 			}
 		} else {
 			libpath = append(libpath, t)
 		}
 	}
+	return libpath
 }
 
 func init() {
 	deps = make(map[string]DepsInfo)
 	deflib = []string{"/lib/", "/usr/lib/", "/lib64", "/usr/lib64"}
 	envlib = os.Getenv("LD_LIBRARY_PATH")
-	readLdSoConf("/etc/ld.so.conf", conflib)
+	conflib = readLdSoConf("/etc/ld.so.conf", conflib)
 
 	flag.BoolVar(&verbose, "v", false, "Show binary info")
 	flag.BoolVar(&showPath, "p", false, "Show library path")
