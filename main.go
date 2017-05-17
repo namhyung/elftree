@@ -1,4 +1,10 @@
-/* ELF tree - Tree viewer for ELF library dependency */
+/*
+ * ELF tree - Tree viewer for ELF library dependency
+ *
+ * Copyright (C) 2017  Namhyung Kim <namhyung@gmail.com>
+ *
+ * Released under MIT license.
+ */
 package main
 
 import (
