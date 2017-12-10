@@ -547,6 +547,17 @@ func AddSubTree(name string, items []string, parent *TreeItem) {
 	parent.total += len(items) + 1
 }
 
+const (
+	DT_GNU_HASH   = elf.DT_HIOS + 3829
+	DT_RELACOUNT  = elf.DT_VERSYM + 9
+	DT_RELCOUNT   = elf.DT_VERSYM + 10
+	DT_FLAGS_1    = elf.DT_VERSYM + 11
+	DT_VERDEF     = elf.DT_VERSYM + 12
+	DT_VERDEFNUM  = elf.DT_VERSYM + 13
+	DT_VERNEED    = elf.DT_VERSYM + 14
+	DT_VERNEEDNUM = elf.DT_VERSYM + 15
+)
+
 func makeInfoItems(name string, info *DepsInfo) FileInfo {
 	root := &TreeItem{node: name}
 
@@ -577,10 +588,24 @@ func makeInfoItems(name string, info *DepsInfo) FileInfo {
 			fallthrough
 		case elf.DT_SONAME:
 			dyns = append(dyns, fmt.Sprintf("  %-16s  %s", v.tag, v.val.(string)))
-			break
+		case DT_GNU_HASH:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %x", "DT_GNU_HASH", v.val))
+		case DT_RELACOUNT:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %v", "DT_RELACOUNT", v.val))
+		case DT_RELCOUNT:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %v", "DT_RELCOUNT", v.val))
+		case DT_FLAGS_1:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %x", "DT_FLAGS_1", v.val))
+		case DT_VERDEF:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %x", "DT_VERDEF", v.val))
+		case DT_VERDEFNUM:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %v", "DT_VERDEFNUM", v.val))
+		case DT_VERNEED:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %x", "DT_VERNEED", v.val))
+		case DT_VERNEEDNUM:
+			dyns = append(dyns, fmt.Sprintf("  %-16s  %v", "DT_VERNEEDNUM", v.val))
 		default:
 			dyns = append(dyns, fmt.Sprintf("  %-16s  %x", v.tag, v.val))
-			break
 		}
 	}
 	AddSubTree("", nil, root)
