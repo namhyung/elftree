@@ -174,7 +174,7 @@ func strFlags1(val uint64) string {
 	return str.Join(ret, "|")
 }
 
-func makeDynamicInfo(info *DepsInfo) []string {
+func makeDynamicStrings(info *DepsInfo) []string {
 	// dynamic attributes
 	var dyns []string
 	for _, v := range info.dyns {

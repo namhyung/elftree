@@ -50,12 +50,14 @@ type FileInfo struct {
 const (
 	MODE_FILE = iota
 	MODE_SYMBOL
+	MODE_DYNAMIC
 )
 
 var (
 	mode  int
 	finfo map[string]FileInfo
-	sinfo map[string]FileInfo
+	yinfo map[string]FileInfo
+	dinfo map[string]FileInfo
 )
 
 type StatusLine struct {
@@ -531,8 +533,13 @@ func makeFileInfo(name string, info *DepsInfo) FileInfo {
 	AddSubTree("", nil, root)
 	AddSubTree("Program Info       flags      vaddr      size     align", phdr, root)
 
+	// dependent libraries
+	var libs []string
+	for _, v := range info.libs {
+		libs = append(libs, "  "+v)
+	}
 	AddSubTree("", nil, root)
-	AddSubTree("Dynamic Info", makeDynamicInfo(info), root)
+	AddSubTree("Dependencies", libs, root)
 
 	return FileInfo{Root: root}
 }
@@ -559,6 +566,16 @@ func makeSymbolInfo(name string, info *DepsInfo) FileInfo {
 	return FileInfo{Root: root}
 }
 
+func makeDynamicInfo(name string, info *DepsInfo) FileInfo {
+	root := &TreeItem{node: name}
+
+	// dynamic info
+	AddSubTree("", nil, root)
+	AddSubTree("Dynamic Info", makeDynamicStrings(info), root)
+
+	return FileInfo{Root: root}
+}
+
 func saveInfoView(tv, iv *TreeView) {
 	curr := tv.Curr
 	node := curr.node.(*DepsNode)
@@ -571,7 +588,13 @@ func saveInfoView(tv, iv *TreeView) {
 	info.idx = iv.idx
 	info.pos = iv.pos
 
-	info = sinfo[node.name]
+	info = yinfo[node.name]
+
+	info.off = iv.off
+	info.idx = iv.idx
+	info.pos = iv.pos
+
+	info = dinfo[node.name]
 
 	info.off = iv.off
 	info.idx = iv.idx
@@ -586,8 +609,10 @@ func restoreInfoView(tv, iv *TreeView) {
 
 	if mode == MODE_FILE {
 		info = finfo[node.name]
+	} else if mode == MODE_SYMBOL {
+		info = yinfo[node.name]
 	} else {
-		info = sinfo[node.name]
+		info = dinfo[node.name]
 	}
 
 	iv.Root = info.Root
@@ -640,10 +665,12 @@ func ShowWithTUI(dep *DepsNode) {
 	sl := NewStatusLine(tv)
 
 	finfo = make(map[string]FileInfo)
-	sinfo = make(map[string]FileInfo)
+	yinfo = make(map[string]FileInfo)
+	dinfo = make(map[string]FileInfo)
 	for k, v := range deps {
 		finfo[k] = makeFileInfo(k, &v)
-		sinfo[k] = makeSymbolInfo(k, &v)
+		yinfo[k] = makeSymbolInfo(k, &v)
+		dinfo[k] = makeDynamicInfo(k, &v)
 	}
 	mode = MODE_FILE
 
@@ -674,6 +701,13 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 	tui.Handle("/sys/kbd/y", func(tui.Event) {
 		mode = MODE_SYMBOL
+		restoreInfoView(tv, iv)
+
+		tui.Render(iv)
+		tui.Render(sl)
+	})
+	tui.Handle("/sys/kbd/d", func(tui.Event) {
+		mode = MODE_DYNAMIC
 		restoreInfoView(tv, iv)
 
 		tui.Render(iv)
