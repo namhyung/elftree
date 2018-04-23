@@ -41,7 +41,8 @@ type DepsInfo struct {
 	ver    uint8
 
 	libs []string
-	dsym []elf.ImportedSymbol
+	isym []elf.ImportedSymbol
+	dsym []elf.Symbol
 	syms []elf.Symbol
 	prog []*elf.Prog
 	dyns []DynInfo
@@ -288,7 +289,13 @@ func processDep(dep *DepsNode) {
 		os.Exit(1)
 	}
 
-	dsym, err := f.ImportedSymbols()
+	isym, err := f.ImportedSymbols()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	dsym, err := f.DynamicSymbols()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -301,6 +308,7 @@ func processDep(dep *DepsNode) {
 
 	info.libs = libs
 	info.dsym = dsym
+	info.isym = isym
 
 	var L []*DepsNode
 	for _, soname := range libs {

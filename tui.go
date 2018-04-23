@@ -528,6 +528,28 @@ func makeInfoItems(name string, info *DepsInfo) FileInfo {
 	return FileInfo{Root: root}
 }
 
+func makeSymbolInfo(name string, info *DepsInfo) FileInfo {
+	root := &TreeItem{node: name}
+
+	// dynamic symbols
+	AddSubTree("", nil, root)
+	var dsym []string
+	for _, v := range info.dsym {
+		dsym = append(dsym, makeSymbolString(v))
+	}
+	AddSubTree("Dynamic Symbols", dsym, root)
+
+	// normal symbols
+	AddSubTree("", nil, root)
+	var nsym []string
+	for _, v := range info.syms {
+		nsym = append(nsym, makeSymbolString(v))
+	}
+	AddSubTree("Symbols", nsym, root)
+
+	return FileInfo{Root: root}
+}
+
 func saveInfoView(tv, iv *TreeView) {
 	curr := tv.Curr
 	node := curr.node.(*DepsNode)

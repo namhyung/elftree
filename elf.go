@@ -212,3 +212,39 @@ func makeDynamicInfo(info *DepsInfo) []string {
 
 	return dyns
 }
+
+func makeSymbolString(sym elf.Symbol) string {
+	var t string
+	switch elf.ST_TYPE(sym.Info) {
+	case elf.STT_NOTYPE:
+		t = "NON"
+	case elf.STT_OBJECT:
+		t = "OBJ"
+	case elf.STT_FUNC:
+		t = "FUN"
+	case elf.STT_SECTION:
+		t = "SEC"
+	case elf.STT_FILE:
+		t = "FIL"
+	case elf.STT_COMMON:
+		t = "COM"
+	case elf.STT_TLS:
+		t = "TLS"
+	default:
+		t = "XXX"
+	}
+
+	var b string
+	switch elf.ST_BIND(sym.Info) {
+	case elf.STB_LOCAL:
+		b = "L"
+	case elf.STB_GLOBAL:
+		b = "G"
+	case elf.STB_WEAK:
+		b = "W"
+	default:
+		b = "X"
+	}
+
+	return fmt.Sprintf("  %8x %s %s %s", sym.Value, t, b, sym.Name)
+}
