@@ -41,6 +41,15 @@ folding and expanding subtree and shows related information.
        libc.so.6
        ld-linux-x86-64.so.2
 
+### TUI keys
+* `f`: file header view
+* `s`: section header view
+* `d`: dynamic info view
+* `y`: symbol view
+* `ENTER`: toggle folding
+* `TAB`: switch window
+* `q`: quit
+
 ## How to install
 If you have golang environment setup:
 
