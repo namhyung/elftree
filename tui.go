@@ -47,7 +47,16 @@ type FileInfo struct {
 	pos  int
 }
 
-var finfo map[string]FileInfo
+const (
+	MODE_FILE = iota
+	MODE_SYMBOL
+)
+
+var (
+	mode  int
+	finfo map[string]FileInfo
+	sinfo map[string]FileInfo
+)
 
 type StatusLine struct {
 	tui.Block // embedded
@@ -504,7 +513,7 @@ func AddSubTree(name string, items []string, parent *TreeItem) {
 	parent.total += len(items) + 1
 }
 
-func makeInfoItems(name string, info *DepsInfo) FileInfo {
+func makeFileInfo(name string, info *DepsInfo) FileInfo {
 	root := &TreeItem{node: name}
 
 	// general file info
@@ -554,7 +563,15 @@ func saveInfoView(tv, iv *TreeView) {
 	curr := tv.Curr
 	node := curr.node.(*DepsNode)
 
-	info := finfo[node.name]
+	var info FileInfo
+
+	info = finfo[node.name]
+
+	info.off = iv.off
+	info.idx = iv.idx
+	info.pos = iv.pos
+
+	info = sinfo[node.name]
 
 	info.off = iv.off
 	info.idx = iv.idx
@@ -565,7 +582,13 @@ func restoreInfoView(tv, iv *TreeView) {
 	curr := tv.Curr
 	node := curr.node.(*DepsNode)
 
-	info := finfo[node.name]
+	var info FileInfo
+
+	if mode == MODE_FILE {
+		info = finfo[node.name]
+	} else {
+		info = sinfo[node.name]
+	}
 
 	iv.Root = info.Root
 
@@ -617,9 +640,12 @@ func ShowWithTUI(dep *DepsNode) {
 	sl := NewStatusLine(tv)
 
 	finfo = make(map[string]FileInfo)
+	sinfo = make(map[string]FileInfo)
 	for k, v := range deps {
-		finfo[k] = makeInfoItems(k, &v)
+		finfo[k] = makeFileInfo(k, &v)
+		sinfo[k] = makeSymbolInfo(k, &v)
 	}
+	mode = MODE_FILE
 
 	restoreInfoView(tv, iv)
 
@@ -637,6 +663,21 @@ func ShowWithTUI(dep *DepsNode) {
 	tui.Handle("/sys/kbd/C-c", func(tui.Event) {
 		// press Ctrl-C to quit
 		tui.StopLoop()
+	})
+
+	tui.Handle("/sys/kbd/f", func(tui.Event) {
+		mode = MODE_FILE
+		restoreInfoView(tv, iv)
+
+		tui.Render(iv)
+		tui.Render(sl)
+	})
+	tui.Handle("/sys/kbd/y", func(tui.Event) {
+		mode = MODE_SYMBOL
+		restoreInfoView(tv, iv)
+
+		tui.Render(iv)
+		tui.Render(sl)
 	})
 
 	tui.Handle("/sys/kbd/<down>", func(tui.Event) {
