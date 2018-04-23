@@ -43,6 +43,8 @@ type TreeView struct {
 
 type FileInfo struct {
 	Root *TreeItem
+	Top  *TreeItem
+	Curr *TreeItem
 	idx  int
 	off  int
 	pos  int
@@ -57,10 +59,11 @@ const (
 
 var (
 	mode  int
-	finfo map[string]FileInfo
-	yinfo map[string]FileInfo
-	dinfo map[string]FileInfo
-	sinfo map[string]FileInfo
+	finfo map[string]*FileInfo
+	yinfo map[string]*FileInfo
+	dinfo map[string]*FileInfo
+	sinfo map[string]*FileInfo
+	focus *TreeView
 )
 
 type StatusLine struct {
@@ -164,8 +167,13 @@ func (tv *TreeView) drawDepsNode(buf tui.Buffer, dn *DepsNode, i, printed int, f
 	fg := tv.ItemFgColor
 	bg := tv.ItemBgColor
 	if i == tv.idx {
-		fg = tv.FocusFgColor
-		bg = tv.FocusBgColor
+		if focus == tv {
+			fg = tv.FocusFgColor
+			bg = tv.FocusBgColor
+		} else {
+			fg = tv.ItemBgColor
+			bg = tv.ItemFgColor
+		}
 	}
 
 	indent := 3 * dn.depth
@@ -224,29 +232,46 @@ func (tv *TreeView) drawDepsNode(buf tui.Buffer, dn *DepsNode, i, printed int, f
 	}
 }
 
-func (tv *TreeView) drawStrNode(buf tui.Buffer, s string, i, printed int) {
+func (tv *TreeView) drawStrNode(buf tui.Buffer, s string, i, printed int, sign rune) {
 	fg := tv.ItemFgColor
 	bg := tv.ItemBgColor
+	if i == tv.idx {
+		if focus == tv {
+			fg = tv.FocusFgColor
+			bg = tv.FocusBgColor
+		}
+	}
 
 	cs := tui.DefaultTxBuilder.Build(s, fg, bg)
 	cs = tui.DTrimTxCls(cs, tv.cols-2)
 
-	j := tv.X
-
+	j := 0
 	if j+1 > tv.pos {
-		buf.Set(j+1-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+		buf.Set(tv.X+j+1-tv.pos, printed+1, tui.Cell{sign, fg, bg})
 	}
 	if j+2 > tv.pos {
-		buf.Set(j+2-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+		buf.Set(tv.X+j+2-tv.pos, printed+1, tui.Cell{' ', fg, bg})
 	}
 	j += 2
 
 	for _, vv := range cs {
 		w := vv.Width()
 		if j+1 > tv.pos {
-			buf.Set(j+1-tv.pos, printed+1, vv)
+			buf.Set(tv.X+j+1-tv.pos, printed+1, vv)
 		}
 		j += w
+	}
+
+	if i != tv.idx {
+		return
+	}
+
+	// draw current line cursor to the end
+	for j < tv.cols+tv.pos {
+		if j+1 > tv.pos {
+			buf.Set(tv.X+j+1-tv.pos, printed+1, tui.Cell{' ', fg, bg})
+		}
+		j++
 	}
 }
 
@@ -273,7 +298,13 @@ func (tv *TreeView) Buffer() tui.Buffer {
 			printed++
 			i++
 		case string:
-			tv.drawStrNode(buf, node, i, printed)
+			sign := ' '
+			if ti.folded {
+				sign = '+'
+			} else if ti.child != nil {
+				sign = '-'
+			}
+			tv.drawStrNode(buf, node, i, printed, sign)
 			printed++
 			i++
 		default:
@@ -515,10 +546,11 @@ func AddSubTree(name string, items []string, parent *TreeItem) {
 		p = t
 	}
 
-	parent.total += len(items) + 1
+	parent.total = len(items)
+	parent.parent.total += len(items) + 1
 }
 
-func makeFileInfo(name string, info *DepsInfo) FileInfo {
+func makeFileInfo(name string, info *DepsInfo) *FileInfo {
 	root := &TreeItem{node: name}
 
 	// general file info
@@ -546,10 +578,10 @@ func makeFileInfo(name string, info *DepsInfo) FileInfo {
 	AddSubTree("", nil, root)
 	AddSubTree("Dependencies", libs, root)
 
-	return FileInfo{Root: root}
+	return &FileInfo{Root: root, Top: root, Curr: root}
 }
 
-func makeSymbolInfo(name string, info *DepsInfo) FileInfo {
+func makeSymbolInfo(name string, info *DepsInfo) *FileInfo {
 	root := &TreeItem{node: name}
 
 	// dynamic symbols
@@ -568,20 +600,20 @@ func makeSymbolInfo(name string, info *DepsInfo) FileInfo {
 	}
 	AddSubTree("Symbols", nsym, root)
 
-	return FileInfo{Root: root}
+	return &FileInfo{Root: root, Top: root, Curr: root}
 }
 
-func makeDynamicInfo(name string, info *DepsInfo) FileInfo {
+func makeDynamicInfo(name string, info *DepsInfo) *FileInfo {
 	root := &TreeItem{node: name}
 
 	// dynamic info
 	AddSubTree("", nil, root)
 	AddSubTree("Dynamic Info", makeDynamicStrings(info), root)
 
-	return FileInfo{Root: root}
+	return &FileInfo{Root: root, Top: root, Curr: root}
 }
 
-func makeSectionInfo(name string, info *DepsInfo) FileInfo {
+func makeSectionInfo(name string, info *DepsInfo) *FileInfo {
 	root := &TreeItem{node: name}
 
 	// section headers
@@ -594,28 +626,32 @@ func makeSectionInfo(name string, info *DepsInfo) FileInfo {
 	}
 	AddSubTree("Section Info", sect, root)
 
-	return FileInfo{Root: root}
+	return &FileInfo{Root: root, Top: root, Curr: root}
 }
 
 func saveInfoView(tv, iv *TreeView) {
+	if focus != tv {
+		return
+	}
+
 	curr := tv.Curr
 	node := curr.node.(*DepsNode)
 
-	var info FileInfo
+	var info *FileInfo
 
-	info = finfo[node.name]
+	if mode == MODE_FILE {
+		info = finfo[node.name]
+	} else if mode == MODE_SYMBOL {
+		info = yinfo[node.name]
+	} else if mode == MODE_DYNAMIC {
+		info = dinfo[node.name]
+	} else if mode == MODE_SECTION {
+		info = sinfo[node.name]
+	}
 
-	info.off = iv.off
-	info.idx = iv.idx
-	info.pos = iv.pos
-
-	info = yinfo[node.name]
-
-	info.off = iv.off
-	info.idx = iv.idx
-	info.pos = iv.pos
-
-	info = dinfo[node.name]
+	info.Root = iv.Root
+	info.Top = iv.Top
+	info.Curr = iv.Curr
 
 	info.off = iv.off
 	info.idx = iv.idx
@@ -623,10 +659,14 @@ func saveInfoView(tv, iv *TreeView) {
 }
 
 func restoreInfoView(tv, iv *TreeView) {
+	if focus != tv {
+		return
+	}
+
 	curr := tv.Curr
 	node := curr.node.(*DepsNode)
 
-	var info FileInfo
+	var info *FileInfo
 
 	if mode == MODE_FILE {
 		info = finfo[node.name]
@@ -639,6 +679,8 @@ func restoreInfoView(tv, iv *TreeView) {
 	}
 
 	iv.Root = info.Root
+	iv.Top = info.Top
+	iv.Curr = info.Curr
 
 	iv.off = info.off
 	iv.idx = info.idx
@@ -685,12 +727,15 @@ func ShowWithTUI(dep *DepsNode) {
 
 	iv := NewTreeView()
 
+	iv.FocusFgColor = tui.ColorYellow
+	iv.FocusBgColor = tui.ColorBlue
+
 	sl := NewStatusLine(tv)
 
-	finfo = make(map[string]FileInfo)
-	yinfo = make(map[string]FileInfo)
-	dinfo = make(map[string]FileInfo)
-	sinfo = make(map[string]FileInfo)
+	finfo = make(map[string]*FileInfo)
+	yinfo = make(map[string]*FileInfo)
+	dinfo = make(map[string]*FileInfo)
+	sinfo = make(map[string]*FileInfo)
 
 	for k, v := range deps {
 		finfo[k] = makeFileInfo(k, &v)
@@ -699,6 +744,7 @@ func ShowWithTUI(dep *DepsNode) {
 		sinfo[k] = makeSectionInfo(k, &v)
 	}
 	mode = MODE_FILE
+	focus = tv
 
 	restoreInfoView(tv, iv)
 
@@ -749,7 +795,7 @@ func ShowWithTUI(dep *DepsNode) {
 
 	tui.Handle("/sys/kbd/<down>", func(tui.Event) {
 		saveInfoView(tv, iv)
-		tv.Down()
+		focus.Down()
 		restoreInfoView(tv, iv)
 
 		tui.Render(tv)
@@ -759,7 +805,7 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 	tui.Handle("/sys/kbd/<up>", func(tui.Event) {
 		saveInfoView(tv, iv)
-		tv.Up()
+		focus.Up()
 		restoreInfoView(tv, iv)
 
 		tui.Render(tv)
@@ -768,28 +814,28 @@ func ShowWithTUI(dep *DepsNode) {
 
 	})
 	tui.Handle("/sys/kbd/<left>", func(tui.Event) {
-		tv.Left(1)
-		tui.Render(tv)
+		focus.Left(1)
+		tui.Render(focus)
 		// no need to redraw sl
 	})
 	tui.Handle("/sys/kbd/<right>", func(tui.Event) {
-		tv.Right(1)
-		tui.Render(tv)
+		focus.Right(1)
+		tui.Render(focus)
 		// no need to redraw sl
 	})
 	tui.Handle("/sys/kbd/<", func(tui.Event) {
-		tv.Left(3)
-		tui.Render(tv)
+		focus.Left(3)
+		tui.Render(focus)
 		// no need to redraw sl
 	})
 	tui.Handle("/sys/kbd/>", func(tui.Event) {
-		tv.Right(3)
-		tui.Render(tv)
+		focus.Right(3)
+		tui.Render(focus)
 		// no need to redraw sl
 	})
 	tui.Handle("/sys/kbd/<next>", func(tui.Event) {
 		saveInfoView(tv, iv)
-		tv.PageDown()
+		focus.PageDown()
 		restoreInfoView(tv, iv)
 
 		tui.Render(tv)
@@ -798,7 +844,7 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 	tui.Handle("/sys/kbd/<previous>", func(tui.Event) {
 		saveInfoView(tv, iv)
-		tv.PageUp()
+		focus.PageUp()
 		restoreInfoView(tv, iv)
 
 		tui.Render(tv)
@@ -807,7 +853,7 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 	tui.Handle("/sys/kbd/<home>", func(tui.Event) {
 		saveInfoView(tv, iv)
-		tv.Home()
+		focus.Home()
 		restoreInfoView(tv, iv)
 
 		tui.Render(tv)
@@ -816,7 +862,7 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 	tui.Handle("/sys/kbd/<end>", func(tui.Event) {
 		saveInfoView(tv, iv)
-		tv.End()
+		focus.End()
 		restoreInfoView(tv, iv)
 
 		tui.Render(tv)
@@ -825,8 +871,21 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 
 	tui.Handle("/sys/kbd/<enter>", func(tui.Event) {
-		tv.Toggle()
+		focus.Toggle()
 		tui.Render(tv)
+		tui.Render(iv)
+		tui.Render(sl)
+	})
+
+	tui.Handle("/sys/kbd/<tab>", func(tui.Event) {
+		if focus == tv {
+			focus = iv
+		} else {
+			focus = tv
+		}
+
+		tui.Render(tv)
+		tui.Render(iv)
 		tui.Render(sl)
 	})
 
