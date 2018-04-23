@@ -765,29 +765,37 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 
 	tui.Handle("/sys/kbd/f", func(tui.Event) {
-		mode = MODE_FILE
-		restoreInfoView(tv, iv)
+		if focus == tv {
+			mode = MODE_FILE
+			restoreInfoView(tv, iv)
+		}
 
 		tui.Render(iv)
 		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/y", func(tui.Event) {
-		mode = MODE_SYMBOL
-		restoreInfoView(tv, iv)
+		if focus == tv {
+			mode = MODE_SYMBOL
+			restoreInfoView(tv, iv)
+		}
 
 		tui.Render(iv)
 		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/d", func(tui.Event) {
-		mode = MODE_DYNAMIC
-		restoreInfoView(tv, iv)
+		if focus == tv {
+			mode = MODE_DYNAMIC
+			restoreInfoView(tv, iv)
+		}
 
 		tui.Render(iv)
 		tui.Render(sl)
 	})
 	tui.Handle("/sys/kbd/s", func(tui.Event) {
-		mode = MODE_SECTION
-		restoreInfoView(tv, iv)
+		if focus == tv {
+			mode = MODE_SECTION
+			restoreInfoView(tv, iv)
+		}
 
 		tui.Render(iv)
 		tui.Render(sl)
