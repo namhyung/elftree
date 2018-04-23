@@ -8,6 +8,7 @@
 package main
 
 import (
+	"fmt"
 	tui "github.com/gizak/termui"
 )
 
@@ -51,6 +52,7 @@ const (
 	MODE_FILE = iota
 	MODE_SYMBOL
 	MODE_DYNAMIC
+	MODE_SECTION
 )
 
 var (
@@ -58,6 +60,7 @@ var (
 	finfo map[string]FileInfo
 	yinfo map[string]FileInfo
 	dinfo map[string]FileInfo
+	sinfo map[string]FileInfo
 )
 
 type StatusLine struct {
@@ -576,6 +579,22 @@ func makeDynamicInfo(name string, info *DepsInfo) FileInfo {
 	return FileInfo{Root: root}
 }
 
+func makeSectionInfo(name string, info *DepsInfo) FileInfo {
+	root := &TreeItem{node: name}
+
+	// section headers
+	AddSubTree("", nil, root)
+	var sect []string
+	sect = append(sect, fmt.Sprintf("  %4s %-24s %-12s %8s %8s %4s",
+		"Idx", "Name", "Type", "Offset", "Size", "Flag"))
+	for i, v := range info.sect {
+		sect = append(sect, makeSectionString(i, v))
+	}
+	AddSubTree("Section Info", sect, root)
+
+	return FileInfo{Root: root}
+}
+
 func saveInfoView(tv, iv *TreeView) {
 	curr := tv.Curr
 	node := curr.node.(*DepsNode)
@@ -611,8 +630,10 @@ func restoreInfoView(tv, iv *TreeView) {
 		info = finfo[node.name]
 	} else if mode == MODE_SYMBOL {
 		info = yinfo[node.name]
-	} else {
+	} else if mode == MODE_DYNAMIC {
 		info = dinfo[node.name]
+	} else if mode == MODE_SECTION {
+		info = sinfo[node.name]
 	}
 
 	iv.Root = info.Root
@@ -667,10 +688,13 @@ func ShowWithTUI(dep *DepsNode) {
 	finfo = make(map[string]FileInfo)
 	yinfo = make(map[string]FileInfo)
 	dinfo = make(map[string]FileInfo)
+	sinfo = make(map[string]FileInfo)
+
 	for k, v := range deps {
 		finfo[k] = makeFileInfo(k, &v)
 		yinfo[k] = makeSymbolInfo(k, &v)
 		dinfo[k] = makeDynamicInfo(k, &v)
+		sinfo[k] = makeSectionInfo(k, &v)
 	}
 	mode = MODE_FILE
 
@@ -708,6 +732,13 @@ func ShowWithTUI(dep *DepsNode) {
 	})
 	tui.Handle("/sys/kbd/d", func(tui.Event) {
 		mode = MODE_DYNAMIC
+		restoreInfoView(tv, iv)
+
+		tui.Render(iv)
+		tui.Render(sl)
+	})
+	tui.Handle("/sys/kbd/s", func(tui.Event) {
+		mode = MODE_SECTION
 		restoreInfoView(tv, iv)
 
 		tui.Render(iv)

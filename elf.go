@@ -248,3 +248,47 @@ func makeSymbolString(sym elf.Symbol) string {
 
 	return fmt.Sprintf("  %8x %s %s %s", sym.Value, t, b, sym.Name)
 }
+
+func makeSectionString(idx int, sec *elf.Section) string {
+	var flag []string
+
+	val := sec.Flags
+	if (val & 0x1) != 0 {
+		flag = append(flag, "W") // write
+	}
+	if (val & 0x2) != 0 {
+		flag = append(flag, "A") // alloc
+	}
+	if (val & 0x4) != 0 {
+		flag = append(flag, "X") // execute
+	}
+	if (val & 0x10) != 0 {
+		flag = append(flag, "M") // merge
+	}
+	if (val & 0x20) != 0 {
+		flag = append(flag, "S") // string
+	}
+	if (val & 0x40) != 0 {
+		flag = append(flag, "I") // info link
+	}
+	if (val & 0x80) != 0 {
+		flag = append(flag, "L") // link order
+	}
+	if (val & 0x100) != 0 {
+		flag = append(flag, "O") // OS non-conforming
+	}
+	if (val & 0x200) != 0 {
+		flag = append(flag, "G") // group
+	}
+	if (val & 0x400) != 0 {
+		flag = append(flag, "T") // TLS
+	}
+	if (val & 0x800) != 0 {
+		flag = append(flag, "C") // compressed
+	}
+	f := str.Join(flag, "")
+
+	t := sec.Type.String()
+	return fmt.Sprintf("  [%2d] %-24s %-12s %8x %8x %4s",
+		idx, sec.Name, t[4:len(t)], sec.Offset, sec.Size, f)
+}

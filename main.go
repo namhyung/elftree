@@ -45,6 +45,7 @@ type DepsInfo struct {
 	dsym []elf.Symbol
 	syms []elf.Symbol
 	prog []*elf.Prog
+	sect []*elf.Section
 	dyns []DynInfo
 }
 
@@ -272,6 +273,7 @@ func processDep(dep *DepsNode) {
 	info.endian = f.ByteOrder
 
 	info.prog = f.Progs
+	info.sect = f.Sections
 
 	if f.Type != elf.ET_EXEC && f.Type != elf.ET_DYN {
 		fmt.Printf("elftree: `%s` seems not to be a valid ELF executable\n", dep.name)
