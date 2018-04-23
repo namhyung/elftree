@@ -51,7 +51,7 @@ func progHdrString(phdr *elf.Prog) string {
 		flagStr = "???"
 	}
 
-	return fmt.Sprintf("%-16s  %s    %#8x  %#8x  %#8x", typeStr, flagStr, phdr.Vaddr, phdr.Memsz, phdr.Align)
+	return fmt.Sprintf("%-16s  %s  %#18x  %#10x  %#8x", typeStr, flagStr, phdr.Vaddr, phdr.Memsz, phdr.Align)
 }
 
 const (

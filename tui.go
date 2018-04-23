@@ -534,7 +534,9 @@ func makeFileInfo(name string, info *DepsInfo) FileInfo {
 		phdr = append(phdr, "  "+progHdrString(v))
 	}
 	AddSubTree("", nil, root)
-	AddSubTree("Program Info       flags      vaddr      size     align", phdr, root)
+	AddSubTree(fmt.Sprintf("%-16s   %s %18s  %10s  %8s",
+		"Program Info", "Flags", "Vaddr", "Size", "Align"),
+		phdr, root)
 
 	// dependent libraries
 	var libs []string
