@@ -9,7 +9,7 @@ package main
 
 import (
 	"fmt"
-	tui "github.com/gizak/termui"
+	tui "github.com/airking05/termui" // for termui bug #177
 )
 
 type TreeItem struct {
